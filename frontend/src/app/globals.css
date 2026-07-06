@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Paleta "lambe-lambe de estúdio": papel, tinta, marca-texto e REC */
+  --color-papel: #f4f2ec;
+  --color-papel-card: #fbfaf6;
+  --color-tinta: #131210;
+  --color-tinta-suave: #45423a;
+  --color-cinza: #6f6b60;
+  --color-marca: #ffd91a;
+  --color-rec: #e5402a;
+
+  --font-display: var(--font-anton);
+  --font-body: var(--font-archivo);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--color-papel);
+  color: var(--color-tinta);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--color-marca);
+  color: var(--color-tinta);
+}
+
+/* Foco visível em tudo que é interativo */
+:focus-visible {
+  outline: 2px solid var(--color-rec);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/*
+ * Risco de marca-texto — o elemento-assinatura da página.
+ * O gradiente cobre só a metade de baixo do texto, como um marcador real.
+ */
+.marca-texto {
+  background-image: linear-gradient(
+    100deg,
+    transparent 1%,
+    var(--color-marca) 2.5%,
+    var(--color-marca) 97.5%,
+    transparent 99%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 46%;
+  background-position: 0 78%;
+  padding: 0 0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/*
+ * Variante para fundos ESCUROS (ex.: tela final): o marcador cobre a letra
+ * inteira — senão o topo da letra escura desaparece no fundo escuro.
+ */
+.marca-texto-cheio {
+  background-image: linear-gradient(
+    100deg,
+    transparent 1%,
+    var(--color-marca) 2.5%,
+    var(--color-marca) 97.5%,
+    transparent 99%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  padding: 0.04em 0.12em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Variante animada: o risco "passa" da esquerda pra direita */
+@media (prefers-reduced-motion: no-preference) {
+  .marca-texto-animado {
+    background-size: 0% 46%;
+    animation: riscar 0.55s ease-out 0.9s forwards;
+  }
+
+  @keyframes riscar {
+    to {
+      background-size: 100% 46%;
+    }
+  }
+
+  .rec-pulso {
+    animation: pulsar 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulsar {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .cursor-bloco {
+    animation: piscar 1s steps(2) infinite;
+  }
+
+  @keyframes piscar {
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+/* Setinha do accordion do FAQ */
+details.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+details.faq-item[open] .faq-seta {
+  transform: rotate(45deg);
+}
