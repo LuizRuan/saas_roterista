@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { sair, usuarioAtual, type Usuario } from "@/lib/api";
+import { sair, usuarioAtual, gerarRoteiro as gerarRoteiroApi, ErroApi, type Usuario, type AvaliacaoIA } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -24,7 +24,7 @@ type TomNarrativo =
   | "educativo"
   | "curioso";
 
-type EtapaGeracao = "ocioso" | "analisando" | "escrevendo" | "pronto" | "erro";
+type EtapaGeracao = "ocioso" | "analisando" | "escrevendo" | "refinando" | "pronto" | "erro";
 
 interface ConfigRoteiro {
   tema: string;
@@ -61,39 +61,7 @@ const TONS: { valor: TomNarrativo; label: string; descricao: string }[] = [
   { valor: "curioso", label: "Curioso", descricao: "Abre uma pergunta que prende" },
 ];
 
-// Roteiro de demonstração — nunca apresentado como real
-const ROTEIRO_DEMO: SecaoRoteiro[] = [
-  {
-    label: "GANCHO",
-    tempo: "0–3s",
-    conteudo:
-      "Você está perdendo dinheiro todo mês sem perceber — e a maioria das pessoas nem sabe disso.",
-  },
-  {
-    label: "PROBLEMA",
-    tempo: "3–12s",
-    conteudo:
-      "A maioria das pessoas trabalha para pagar contas que poderiam ser eliminadas. Assinaturas esquecidas, taxas escondidas, hábitos automáticos. Dinheiro que some sem que você veja.",
-  },
-  {
-    label: "VIRADA",
-    tempo: "12–25s",
-    conteudo:
-      "Mas tem uma regra simples que muda isso: o extrato de 90 dias. Abra seu banco agora, vá em histórico e some tudo que saiu nos últimos 3 meses. O número vai te chocar.",
-  },
-  {
-    label: "PROVA",
-    tempo: "25–45s",
-    conteudo:
-      "Fiz isso em janeiro. Encontrei R$ 340 em assinaturas que não usava. Cancela em 5 minutos. É dinheiro de volta no bolso sem mudar um hábito sequer.",
-  },
-  {
-    label: "CALL TO ACTION",
-    tempo: "45–60s",
-    conteudo:
-      "Salva esse vídeo, faz o teste agora e me conta nos comentários: quanto você achou de desperdício? Segue pra mais desses.",
-  },
-];
+
 
 // ---------------------------------------------------------------------------
 // Componentes auxiliares
@@ -127,6 +95,7 @@ function PulsoBadge({ etapa }: { etapa: EtapaGeracao }) {
     ocioso: { cor: "", texto: "", pisca: false },
     analisando: { cor: "bg-marca", texto: "ANALISANDO PADRÕES", pisca: true },
     escrevendo: { cor: "bg-rec", texto: "ESCREVENDO", pisca: true },
+    refinando: { cor: "bg-marca", texto: "REFINANDO ROTEIRO", pisca: true },
     pronto: { cor: "bg-tinta", texto: "ROTEIRO PRONTO", pisca: false },
     erro: { cor: "bg-rec", texto: "ERRO", pisca: false },
   };
@@ -166,6 +135,7 @@ export function Designer() {
   // Geração
   const [etapa, setEtapa] = useState<EtapaGeracao>("ocioso");
   const [roteiro, setRoteiro] = useState<SecaoRoteiro[] | null>(null);
+  const [avaliacao, setAvaliacao] = useState<AvaliacaoIA | null>(null);
   const [erroMensagem, setErroMensagem] = useState("");
   const roteiroRef = useRef<HTMLDivElement>(null);
 
@@ -215,25 +185,46 @@ export function Designer() {
     setConfig((prev) => ({ ...prev, [campo]: valor }));
   }
 
-  async function gerarRoteiro() {
+  async function gerarRoteiroHandler() {
     if (!config.tema.trim()) return;
 
     setEtapa("analisando");
     setRoteiro(null);
+    setAvaliacao(null);
     setErroMensagem("");
 
-    // Fase 4: aqui entrará a chamada real à API de IA.
-    // Por enquanto, simula o fluxo com o roteiro de demonstração.
-    await new Promise((r) => setTimeout(r, 1400));
-    setEtapa("escrevendo");
-    await new Promise((r) => setTimeout(r, 1800));
-    setRoteiro(ROTEIRO_DEMO);
-    setEtapa("pronto");
+    try {
+      setEtapa("escrevendo");
 
-    // Rola suavemente até o resultado
-    setTimeout(() => {
-      roteiroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+      const resultado = await gerarRoteiroApi({
+        tema: config.tema,
+        formato: config.formato,
+        tom: config.tom,
+        publico: config.publico,
+        palavraChave: config.palavraChave,
+      });
+
+      const secoes: SecaoRoteiro[] = [
+        { label: "GANCHO", tempo: "0–3s", conteudo: resultado.roteiro.gancho },
+        { label: "PROBLEMA", tempo: "3–12s", conteudo: resultado.roteiro.problema },
+        { label: "VIRADA", tempo: "12–25s", conteudo: resultado.roteiro.virada },
+        { label: "PROVA", tempo: "25–45s", conteudo: resultado.roteiro.prova },
+        { label: "CALL TO ACTION", tempo: "45s+", conteudo: resultado.roteiro.cta },
+      ];
+
+      setRoteiro(secoes);
+      setAvaliacao(resultado.avaliacao);
+      setEtapa("pronto");
+
+      setTimeout(() => {
+        roteiroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } catch (erro) {
+      setEtapa("erro");
+      setErroMensagem(
+        erro instanceof ErroApi ? erro.message : "Erro ao gerar roteiro. Tente novamente."
+      );
+    }
   }
 
   async function copiarRoteiro() {
@@ -249,6 +240,7 @@ export function Designer() {
   function resetar() {
     setEtapa("ocioso");
     setRoteiro(null);
+    setAvaliacao(null);
     setErroMensagem("");
   }
 
@@ -503,7 +495,7 @@ export function Designer() {
                 <button
                   type="button"
                   id="btn-gerar-roteiro"
-                  onClick={gerarRoteiro}
+                  onClick={gerarRoteiroHandler}
                   disabled={!podeCriar || etapa !== "ocioso"}
                   className="flex items-center gap-3 bg-tinta px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest text-papel transition-all hover:bg-tinta-suave disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -537,14 +529,16 @@ export function Designer() {
               </div>
             )}
 
-            {(etapa === "analisando" || etapa === "escrevendo") && (
+            {(etapa === "analisando" || etapa === "escrevendo" || etapa === "refinando") && (
               <div className="flex min-h-[360px] flex-col items-center justify-center gap-6 border border-tinta/10 px-8 py-12">
                 <div className="space-y-3 text-center">
                   <PulsoBadge etapa={etapa} />
                   <p className="font-mono text-xs text-cinza">
                     {etapa === "analisando"
-                      ? "Cruzando padrões de retenção…"
-                      : "Montando estrutura cena a cena…"}
+                      ? "Carregando padrões virais do banco…"
+                      : etapa === "refinando"
+                      ? "Refinando com base na avaliação…"
+                      : "Criando roteiro com IA…"}
                   </p>
                 </div>
 
@@ -610,13 +604,40 @@ export function Designer() {
                   </div>
                 ))}
 
-                {/* Rodapé do card */}
-                <div className="border-t border-tinta/10 bg-tinta/3 px-4 py-3">
-                  <p className="font-mono text-[10px] leading-snug text-cinza">
-                    Demonstração · padrão estrutural gerado pela IA · não representa
-                    um roteiro real do usuário
-                  </p>
-                </div>
+                {/* Notas da avaliação */}
+                {avaliacao && (
+                  <div className="border-t border-tinta/10 bg-tinta/3 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
+                        avaliacao.aprovado
+                          ? "bg-marca text-tinta"
+                          : "bg-rec/20 text-rec"
+                      }`}>
+                        {avaliacao.aprovado ? "✓ Aprovado" : "⚠ Nota abaixo do ideal"}
+                        {" · "}{avaliacao.notaFinal}/10
+                        {avaliacao.tentativas > 1 ? ` · ${avaliacao.tentativas} tentativas` : ""}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      {([
+                        ["Gancho", avaliacao.notas.gancho],
+                        ["Retenção", avaliacao.notas.retencao],
+                        ["CTA", avaliacao.notas.cta],
+                        ["Clareza", avaliacao.notas.clareza],
+                        ["Adequação", avaliacao.notas.adequacao],
+                      ] as const).map(([label, nota]) => (
+                        <span key={label} className="font-mono text-[10px] text-cinza">
+                          {label}{" "}
+                          <span className={`font-semibold ${
+                            nota >= 8 ? "text-tinta" : nota >= 6 ? "text-tinta-suave" : "text-rec"
+                          }`}>
+                            {nota}/10
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

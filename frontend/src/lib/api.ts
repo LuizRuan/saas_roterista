@@ -174,3 +174,46 @@ export async function atualizarPadrao(
 export async function deletarPadrao(id: string): Promise<void> {
   await requisicao<null>(`/admin/padroes/${id}`, { method: "DELETE" });
 }
+
+// ─── Geração de roteiros ─────────────────────────────────────────────────────
+
+export type NotasAvaliacao = {
+  gancho: number;
+  retencao: number;
+  cta: number;
+  clareza: number;
+  adequacao: number;
+};
+
+export type RoteiroIA = {
+  gancho: string;
+  problema: string;
+  virada: string;
+  prova: string;
+  cta: string;
+};
+
+export type AvaliacaoIA = {
+  notas: NotasAvaliacao;
+  notaFinal: number;
+  aprovado: boolean;
+  tentativas: number;
+};
+
+export type ResultadoGeracao = {
+  roteiro: RoteiroIA;
+  avaliacao: AvaliacaoIA;
+};
+
+export async function gerarRoteiro(dados: {
+  tema: string;
+  formato: string;
+  tom: string;
+  publico: string;
+  palavraChave: string;
+}): Promise<ResultadoGeracao> {
+  return requisicao<ResultadoGeracao>("/roteiros/gerar", {
+    method: "POST",
+    body: JSON.stringify(dados),
+  });
+}

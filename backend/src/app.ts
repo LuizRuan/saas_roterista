@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { env } from "./config/env";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
+import { roteirosRouter } from "./routes/roteiros";
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/admin", adminRouter);
+app.use("/roteiros", roteirosRouter);
 
 // Erros inesperados nunca vazam stack trace para o cliente.
 app.use(

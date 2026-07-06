@@ -14,6 +14,9 @@ const envSchema = z.object({
   // Defaults só valem em dev/test; em produção são obrigatórias (checagem abaixo)
   JWT_ACCESS_SECRET: z.string().default("dev-access-secret-trocar-em-producao"),
   JWT_REFRESH_SECRET: z.string().default("dev-refresh-secret-trocar-em-producao"),
+  // Chaves de IA — opcionais em dev; sem elas a geração retorna erro 503.
+  GROQ_API_KEY: z.string().default(""),
+  GEMINI_API_KEY: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
