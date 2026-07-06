@@ -2,10 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
- HEAD
     "moduleResolution": "node16",
-
-    "moduleResolution": "node", 39ba8557643559adec0e102057a03d044a3b3408
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": "src",
