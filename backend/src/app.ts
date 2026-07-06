@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import { env } from "./config/env";
 import { authRouter } from "./routes/auth";
+import { adminRouter } from "./routes/admin";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/admin", adminRouter);
 
 // Erros inesperados nunca vazam stack trace para o cliente.
 app.use(

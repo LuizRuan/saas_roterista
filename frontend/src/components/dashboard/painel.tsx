@@ -336,6 +336,14 @@ export function Painel() {
             >
               Designer
             </Link>
+            {usuario?.papel === "admin" && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 rounded bg-rec px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel transition-opacity hover:opacity-80"
+              >
+                Admin
+              </Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-4">
@@ -470,7 +478,7 @@ export function Painel() {
                 <CardAcao
                   titulo="Meus Roteiros"
                   descricao="Veja, edite e reutilize os roteiros que você já gerou."
-                  href="/designer"
+                  href="/roteiros"
                   botaoTexto="Ver roteiros"
                   icone="R"
                 />

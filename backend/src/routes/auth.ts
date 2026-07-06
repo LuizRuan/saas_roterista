@@ -75,7 +75,8 @@ authRouter.use(limiteAuth, exigirBanco);
 
 /** Gera par de tokens, persiste o hash do refresh e escreve o cookie. */
 async function abrirSessao(res: Parameters<RequestHandler>[1], usuario: UsuarioDoc) {
-  const accessToken = gerarAccessToken(usuario._id.toString());
+  const papel = (usuario.papel ?? "usuario") as "usuario" | "admin";
+  const accessToken = gerarAccessToken(usuario._id.toString(), papel);
   const refreshToken = gerarRefreshToken(usuario._id.toString());
 
   usuario.refreshTokenHash = hashToken(refreshToken);

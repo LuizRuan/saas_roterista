@@ -5,6 +5,7 @@ export type Usuario = {
   nome: string;
   email: string;
   plano: "free" | "pro";
+  papel: "usuario" | "admin";
   criadoEm: string;
 };
 
@@ -116,4 +117,60 @@ export async function usuarioAtual(): Promise<Usuario | null> {
     if (erro instanceof ErroApi && erro.status === 401) return renovarSessao();
     throw erro;
   }
+}
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+
+export type PadraoViral = {
+  id: string;
+  titulo: string;
+  formato: string;
+  tom: string;
+  gancho: string;
+  problema: string;
+  virada: string;
+  prova: string;
+  cta: string;
+  ativo: boolean;
+  criadoEm: string;
+};
+
+export type PadraoViralInput = {
+  titulo: string;
+  formato: string;
+  tom: string;
+  gancho: string;
+  problema: string;
+  virada: string;
+  prova: string;
+  cta: string;
+  ativo?: boolean;
+};
+
+export async function listarPadroes(): Promise<PadraoViral[]> {
+  const corpo = await requisicao<{ padroes: PadraoViral[] }>("/admin/padroes");
+  return corpo.padroes;
+}
+
+export async function criarPadrao(dados: PadraoViralInput): Promise<PadraoViral> {
+  const corpo = await requisicao<{ padrao: PadraoViral }>("/admin/padroes", {
+    method: "POST",
+    body: JSON.stringify(dados),
+  });
+  return corpo.padrao;
+}
+
+export async function atualizarPadrao(
+  id: string,
+  dados: Partial<PadraoViralInput>
+): Promise<PadraoViral> {
+  const corpo = await requisicao<{ padrao: PadraoViral }>(`/admin/padroes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(dados),
+  });
+  return corpo.padrao;
+}
+
+export async function deletarPadrao(id: string): Promise<void> {
+  await requisicao<null>(`/admin/padroes/${id}`, { method: "DELETE" });
 }

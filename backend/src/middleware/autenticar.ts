@@ -6,6 +6,8 @@ declare global {
     interface Request {
       /** Preenchido pelo middleware autenticar. */
       usuarioId?: string;
+      /** Papel do usuário autenticado — preenchido pelo middleware autenticar. */
+      usuarioPapel?: "usuario" | "admin";
     }
   }
 }
@@ -27,5 +29,6 @@ export const autenticar: RequestHandler = (req, res, next) => {
   }
 
   req.usuarioId = payload.sub;
+  req.usuarioPapel = payload.papel;
   next();
 };

@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "promover-admin": "tsx scripts/promover-admin.ts"
   },
   "engines": {
     "node": ">=20"

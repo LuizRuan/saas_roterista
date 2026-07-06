@@ -12,6 +12,7 @@ const usuarioSchema = new Schema(
     },
     senhaHash: { type: String, required: true },
     plano: { type: String, enum: ["free", "pro"], default: "free" },
+    papel: { type: String, enum: ["usuario", "admin"], default: "usuario" },
     // SHA-256 do refresh token ativo (rotação): null = nenhuma sessão aberta.
     refreshTokenHash: { type: String, default: null },
   },
@@ -30,6 +31,7 @@ export function usuarioPublico(usuario: UsuarioDoc) {
     nome: usuario.nome,
     email: usuario.email,
     plano: usuario.plano,
+    papel: usuario.papel as "usuario" | "admin",
     criadoEm: usuario.createdAt,
   };
 }

@@ -8,6 +8,8 @@ export default function PaginaPlanos() {
     <PaginaEmProducao
       titulo="O PLANO PRO ESTÁ EM PRODUÇÃO"
       texto="Pagamentos chegam em breve. Enquanto isso, o plano gratuito vai estar aberto para você testar o Gancho sem cartão."
+      voltar="/dashboard"
+      voltarTexto="Voltar ao dashboard"
     />
   );
 }

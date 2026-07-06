@@ -8,10 +8,10 @@ export const REFRESH_COOKIE = "gancho_refresh";
 /** Vida útil do refresh token: 7 dias (em ms, para o cookie). */
 export const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-type PayloadToken = { sub: string };
+type PayloadToken = { sub: string; papel: "usuario" | "admin" };
 
-export function gerarAccessToken(usuarioId: string): string {
-  return jwt.sign({ sub: usuarioId }, env.JWT_ACCESS_SECRET, {
+export function gerarAccessToken(usuarioId: string, papel: "usuario" | "admin" = "usuario"): string {
+  return jwt.sign({ sub: usuarioId, papel }, env.JWT_ACCESS_SECRET, {
     expiresIn: "15m",
   });
 }

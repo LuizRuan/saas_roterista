@@ -7,9 +7,13 @@ import Link from "next/link";
 export function PaginaEmProducao({
   titulo,
   texto,
+  voltar = "/",
+  voltarTexto = "Voltar para o início",
 }: {
   titulo: string;
   texto: string;
+  voltar?: string;
+  voltarTexto?: string;
 }) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
@@ -21,10 +25,10 @@ export function PaginaEmProducao({
       </h1>
       <p className="mt-4 max-w-md leading-relaxed text-tinta-suave">{texto}</p>
       <Link
-        href="/"
+        href={voltar}
         className="mt-8 font-mono text-sm uppercase tracking-widest underline decoration-marca decoration-4 underline-offset-4 hover:text-tinta-suave"
       >
-        ← Voltar para o início
+        ← {voltarTexto}
       </Link>
     </main>
   );
