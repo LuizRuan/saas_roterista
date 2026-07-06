@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { sair, usuarioAtual, gerarRoteiro as gerarRoteiroApi, ErroApi, type Usuario, type AvaliacaoIA } from "@/lib/api";
+import { sair, usuarioAtual, gerarRoteiro as gerarRoteiroApi, listarMeusRoteiros, ErroApi, type Usuario, type AvaliacaoIA, type UsoRoteiros } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -138,6 +138,7 @@ export function Designer() {
   const [avaliacao, setAvaliacao] = useState<AvaliacaoIA | null>(null);
   const [erroMensagem, setErroMensagem] = useState("");
   const roteiroRef = useRef<HTMLDivElement>(null);
+  const [uso, setUso] = useState<UsoRoteiros | null>(null);
 
   // Copiado
   const [copiado, setCopiado] = useState(false);
@@ -147,22 +148,26 @@ export function Designer() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let ativo = true;
-    usuarioAtual()
-      .then((u) => {
+    async function init() {
+      try {
+        const u = await usuarioAtual();
         if (!ativo) return;
-        if (u) {
-          setUsuario(u);
-          setCarregando(false);
-        } else {
-          router.replace("/login");
-        }
-      })
-      .catch(() => {
+        if (!u) { router.replace("/login"); return; }
+        setUsuario(u);
+
+        // Carregar uso diário
+        try {
+          const dados = await listarMeusRoteiros();
+          if (ativo) setUso(dados.uso);
+        } catch { /* sem problema se falhar */ }
+
+        setCarregando(false);
+      } catch {
         if (ativo) router.replace("/login");
-      });
-    return () => {
-      ativo = false;
-    };
+      }
+    }
+    init();
+    return () => { ativo = false; };
   }, [router]);
 
   // ---------------------------------------------------------------------------
@@ -214,6 +219,7 @@ export function Designer() {
 
       setRoteiro(secoes);
       setAvaliacao(resultado.avaliacao);
+      setUso(resultado.uso);
       setEtapa("pronto");
 
       setTimeout(() => {
@@ -261,6 +267,7 @@ export function Designer() {
 
   const temaTamanho = config.tema.length;
   const podeCriar = temaTamanho > 0 && temaTamanho <= 280;
+  const limiteAtingido = uso && uso.limiteDiario !== null && uso.usadosHoje >= uso.limiteDiario;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -281,7 +288,7 @@ export function Designer() {
               href="/dashboard"
               className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
             >
-              Início
+              ← Voltar
             </Link>
             <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">
               Designer
@@ -321,13 +328,6 @@ export function Designer() {
             Configure o padrão estrutural, informe o tema e deixe a IA construir
             um roteiro otimizado para retenção — com gancho, virada e CTA.
           </p>
-          {etapa === "pronto" && (
-            <div className="mt-2">
-              <span className="inline-block rounded bg-marca px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-tinta">
-                ⚠ DEMONSTRAÇÃO — conteúdo gerado para ilustrar o fluxo
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
@@ -496,10 +496,15 @@ export function Designer() {
                   type="button"
                   id="btn-gerar-roteiro"
                   onClick={gerarRoteiroHandler}
-                  disabled={!podeCriar || etapa !== "ocioso"}
+                  disabled={!podeCriar || etapa !== "ocioso" || !!limiteAtingido}
                   className="flex items-center gap-3 bg-tinta px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest text-papel transition-all hover:bg-tinta-suave disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {etapa === "ocioso" ? (
+                  {limiteAtingido ? (
+                    <>
+                      <span aria-hidden className="inline-block size-2 rounded-full bg-rec" />
+                      Limite diário atingido
+                    </>
+                  ) : etapa === "ocioso" ? (
                     <>
                       <span aria-hidden className="inline-block size-2 rounded-full bg-marca" />
                       Criar roteiro
@@ -512,6 +517,31 @@ export function Designer() {
 
               {erroMensagem && (
                 <p className="mt-3 font-mono text-xs text-rec">{erroMensagem}</p>
+              )}
+
+              {/* Contador de uso */}
+              {uso && (
+                <div className="mt-4 flex items-center gap-3">
+                  {uso.limiteDiario !== null ? (
+                    <span className={`font-mono text-xs tabular-nums ${
+                      limiteAtingido ? "font-semibold text-rec" : "text-cinza"
+                    }`}>
+                      {uso.usadosHoje}/{uso.limiteDiario} roteiros hoje
+                    </span>
+                  ) : (
+                    <span className="rounded bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
+                      Admin · Ilimitado
+                    </span>
+                  )}
+                  {limiteAtingido && (
+                    <Link
+                      href="/planos"
+                      className="font-mono text-[10px] font-semibold uppercase tracking-widest text-rec underline decoration-rec/30 underline-offset-4 hover:text-tinta"
+                    >
+                      Upgrade →
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
           </section>

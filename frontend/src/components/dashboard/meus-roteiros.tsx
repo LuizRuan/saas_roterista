@@ -3,13 +3,36 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { sair, usuarioAtual, type Usuario } from "@/lib/api";
+import {
+  sair,
+  usuarioAtual,
+  listarMeusRoteiros,
+  deletarMeuRoteiro,
+  type Usuario,
+  type RoteiroSalvo,
+  type UsoRoteiros,
+} from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// Tipos
+// Labels
 // ---------------------------------------------------------------------------
 
-type FiltroOrdem = "recente" | "formato" | "tom";
+const FORMATO_LABEL: Record<string, string> = {
+  "reels-30s": "Reels 30s",
+  "reels-60s": "Reels 60s",
+  "shorts-60s": "Shorts 60s",
+  "tiktok-15s": "TikTok 15s",
+  "tiktok-60s": "TikTok 60s",
+  "youtube-3min": "YouTube 3min",
+};
+
+const TOM_LABEL: Record<string, string> = {
+  urgente: "Urgente",
+  inspirador: "Inspirador",
+  provocador: "Provocador",
+  educativo: "Educativo",
+  curioso: "Curioso",
+};
 
 // ---------------------------------------------------------------------------
 // Componentes auxiliares
@@ -45,27 +68,138 @@ function EstadoVazio() {
   );
 }
 
-function BotaoFiltro({
-  ativo,
-  onClick,
-  children,
+function CardRoteiro({
+  roteiro,
+  onDeletar,
+  deletando,
 }: {
-  ativo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  roteiro: RoteiroSalvo;
+  onDeletar: (id: string) => void;
+  deletando: boolean;
 }) {
+  const [expandido, setExpandido] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+
+  async function copiar() {
+    const texto =
+      `[GANCHO · 0–3s]\n${roteiro.gancho}\n\n` +
+      `[PROBLEMA · 3–12s]\n${roteiro.problema}\n\n` +
+      `[VIRADA · 12–25s]\n${roteiro.virada}\n\n` +
+      `[PROVA · 25–45s]\n${roteiro.prova}\n\n` +
+      `[CALL TO ACTION · 45s+]\n${roteiro.cta}`;
+    await navigator.clipboard.writeText(texto);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  }
+
+  const data = new Date(roteiro.criadoEm).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`border px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest transition-all ${
-        ativo
-          ? "border-tinta bg-tinta text-papel"
-          : "border-tinta/15 text-cinza hover:border-tinta/40 hover:text-tinta"
-      }`}
-    >
-      {children}
-    </button>
+    <div className="border border-tinta/10 transition-colors hover:border-tinta/20">
+      {/* Header do card */}
+      <div
+        className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4"
+        onClick={() => setExpandido((v) => !v)}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-xs font-semibold text-tinta">
+            {roteiro.tema}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="rounded border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
+              {FORMATO_LABEL[roteiro.formato] ?? roteiro.formato}
+            </span>
+            <span className="rounded border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
+              {TOM_LABEL[roteiro.tom] ?? roteiro.tom}
+            </span>
+            <span
+              className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
+                roteiro.aprovado
+                  ? "bg-marca/20 text-tinta"
+                  : "bg-rec/10 text-rec"
+              }`}
+            >
+              {roteiro.notaFinal}/10
+            </span>
+            <span className="font-mono text-[10px] text-cinza">{data}</span>
+          </div>
+        </div>
+        <span className="font-mono text-xs text-cinza">{expandido ? "▲" : "▼"}</span>
+      </div>
+
+      {/* Conteúdo expandido */}
+      {expandido && (
+        <div className="border-t border-tinta/8">
+          {[
+            { label: "GANCHO", tempo: "0–3s", texto: roteiro.gancho },
+            { label: "PROBLEMA", tempo: "3–12s", texto: roteiro.problema },
+            { label: "VIRADA", tempo: "12–25s", texto: roteiro.virada },
+            { label: "PROVA", tempo: "25–45s", texto: roteiro.prova },
+            { label: "CTA", tempo: "45s+", texto: roteiro.cta },
+          ].map((secao) => (
+            <div
+              key={secao.label}
+              className="border-b border-tinta/8 px-5 py-3 last:border-b-0"
+            >
+              <div className="mb-1 flex items-center gap-2">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-tinta">
+                  {secao.label}
+                </span>
+                <span className="font-mono text-[10px] text-cinza">{secao.tempo}</span>
+              </div>
+              <p className="text-sm leading-relaxed text-tinta-suave">{secao.texto}</p>
+            </div>
+          ))}
+
+          {/* Notas */}
+          <div className="border-t border-tinta/8 bg-tinta/3 px-5 py-3">
+            <div className="flex flex-wrap gap-3">
+              {([
+                ["Gancho", roteiro.notas.gancho],
+                ["Retenção", roteiro.notas.retencao],
+                ["CTA", roteiro.notas.cta],
+                ["Clareza", roteiro.notas.clareza],
+                ["Adequação", roteiro.notas.adequacao],
+              ] as const).map(([label, nota]) => (
+                <span key={label} className="font-mono text-[10px] text-cinza">
+                  {label}{" "}
+                  <span
+                    className={`font-semibold ${
+                      nota >= 8 ? "text-tinta" : nota >= 6 ? "text-tinta-suave" : "text-rec"
+                    }`}
+                  >
+                    {nota}/10
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Ações */}
+          <div className="flex items-center gap-4 border-t border-tinta/8 px-5 py-3">
+            <button
+              type="button"
+              onClick={copiar}
+              className="font-mono text-[10px] uppercase tracking-widest text-tinta-suave underline decoration-marca/50 underline-offset-4 transition-colors hover:text-tinta"
+            >
+              {copiado ? "✓ Copiado!" : "Copiar roteiro"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeletar(roteiro.id)}
+              disabled={deletando}
+              className="font-mono text-[10px] uppercase tracking-widest text-rec/60 underline decoration-rec/30 underline-offset-4 transition-colors hover:text-rec disabled:opacity-40"
+            >
+              {deletando ? "…" : "Deletar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -76,39 +210,51 @@ function BotaoFiltro({
 export function MeusRoteiros() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [roteiros, setRoteiros] = useState<RoteiroSalvo[]>([]);
+  const [uso, setUso] = useState<UsoRoteiros | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [saindo, setSaindo] = useState(false);
-  const [filtro, setFiltro] = useState<FiltroOrdem>("recente");
+  const [deletando, setDeletando] = useState<string | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
 
-  // Auth guard
   useEffect(() => {
     let ativo = true;
-    usuarioAtual()
-      .then((u) => {
+    async function carregar() {
+      try {
+        const u = await usuarioAtual();
         if (!ativo) return;
-        if (u) {
-          setUsuario(u);
-          setCarregando(false);
-          setTimeout(() => setMostrarConteudo(true), 80);
-        } else {
-          router.replace("/login");
-        }
-      })
-      .catch(() => {
+        if (!u) { router.replace("/login"); return; }
+        setUsuario(u);
+
+        const dados = await listarMeusRoteiros();
+        if (!ativo) return;
+        setRoteiros(dados.roteiros);
+        setUso(dados.uso);
+        setCarregando(false);
+        setTimeout(() => setMostrarConteudo(true), 80);
+      } catch {
         if (ativo) router.replace("/login");
-      });
-    return () => {
-      ativo = false;
-    };
+      }
+    }
+    carregar();
+    return () => { ativo = false; };
   }, [router]);
 
   async function aoSair() {
     setSaindo(true);
+    try { await sair(); } finally { router.replace("/"); }
+  }
+
+  async function aoDeletar(id: string) {
+    if (!confirm("Tem certeza que quer deletar este roteiro?")) return;
+    setDeletando(id);
     try {
-      await sair();
+      await deletarMeuRoteiro(id);
+      setRoteiros((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      alert("Não foi possível deletar.");
     } finally {
-      router.replace("/");
+      setDeletando(null);
     }
   }
 
@@ -116,17 +262,12 @@ export function MeusRoteiros() {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
-          <span
-            aria-hidden
-            className="rec-pulso inline-block size-2 rounded-full bg-rec"
-          />
+          <span aria-hidden className="rec-pulso inline-block size-2 rounded-full bg-rec" />
           Carregando roteiros…
         </p>
       </main>
     );
   }
-
-  const primeiroNome = usuario?.nome?.split(" ")[0] ?? "Criador";
 
   return (
     <div className="min-h-screen bg-papel">
@@ -134,10 +275,7 @@ export function MeusRoteiros() {
       <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="rec-pulso inline-block size-2.5 rounded-full bg-rec"
-            />
+            <span aria-hidden className="rec-pulso inline-block size-2.5 rounded-full bg-rec" />
             <span className="font-display text-xl tracking-wide">GANCHO</span>
           </Link>
 
@@ -146,7 +284,7 @@ export function MeusRoteiros() {
               href="/dashboard"
               className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
             >
-              Início
+              ← Voltar
             </Link>
             <Link
               href="/designer"
@@ -161,7 +299,7 @@ export function MeusRoteiros() {
 
           <div className="flex items-center gap-4">
             <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {primeiroNome} · plano{" "}
+              {usuario?.nome?.split(" ")[0]} · plano{" "}
               <span className="font-semibold text-tinta">{usuario?.plano}</span>
             </p>
             <button
@@ -179,12 +317,10 @@ export function MeusRoteiros() {
       {/* ── CORPO ── */}
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-10 sm:px-6">
 
-        {/* Cabeçalho da seção */}
+        {/* Cabeçalho */}
         <div
           className={`transition-all duration-700 ${
-            mostrarConteudo
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
+            mostrarConteudo ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
           <p className="font-mono text-xs font-semibold uppercase tracking-widest text-rec">
@@ -203,37 +339,33 @@ export function MeusRoteiros() {
         {/* Barra de ações */}
         <div
           className={`mt-8 flex flex-wrap items-center justify-between gap-4 transition-all duration-700 delay-150 ${
-            mostrarConteudo
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
+            mostrarConteudo ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
-          {/* Filtros de ordem */}
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-cinza">
-              Ordenar:
-            </span>
-            <div className="flex gap-1.5">
-              <BotaoFiltro
-                ativo={filtro === "recente"}
-                onClick={() => setFiltro("recente")}
-              >
-                Recente
-              </BotaoFiltro>
-              <BotaoFiltro
-                ativo={filtro === "formato"}
-                onClick={() => setFiltro("formato")}
-              >
-                Formato
-              </BotaoFiltro>
-              <BotaoFiltro
-                ativo={filtro === "tom"}
-                onClick={() => setFiltro("tom")}
-              >
-                Tom
-              </BotaoFiltro>
+          {/* Uso diário */}
+          {uso && (
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs tabular-nums text-cinza">
+                {roteiros.length} roteiro{roteiros.length !== 1 ? "s" : ""} salvo{roteiros.length !== 1 ? "s" : ""}
+              </span>
+              {uso.limiteDiario != null && (
+                <>
+                  <span className="text-cinza">·</span>
+                  <span className="font-mono text-xs tabular-nums text-tinta-suave">
+                    {uso.usadosHoje}/{uso.limiteDiario} hoje
+                  </span>
+                </>
+              )}
+              {uso.limiteDiario === null && (
+                <>
+                  <span className="text-cinza">·</span>
+                  <span className="rounded bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
+                    Admin · Ilimitado
+                  </span>
+                </>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Botão novo roteiro */}
           <Link
@@ -245,43 +377,36 @@ export function MeusRoteiros() {
           </Link>
         </div>
 
-        {/* Contador */}
+        {/* Separador */}
         <div
-          className={`mt-4 flex items-center gap-3 border-b border-tinta/10 pb-6 transition-all duration-700 delay-200 ${
-            mostrarConteudo
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
+          className={`mt-4 border-b border-tinta/10 pb-2 transition-all duration-700 delay-200 ${
+            mostrarConteudo ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
-        >
-          <span className="font-mono text-xs tabular-nums text-cinza">
-            0 roteiros salvos
-          </span>
-          {usuario?.plano === "free" && (
-            <>
-              <span className="text-cinza">·</span>
-              <Link
-                href="/planos"
-                className="font-mono text-xs font-semibold uppercase tracking-widest text-rec underline decoration-rec/30 underline-offset-4 transition-colors hover:text-tinta"
-              >
-                Upgrade para ilimitado →
-              </Link>
-            </>
-          )}
-        </div>
+        />
 
-        {/* Conteúdo principal */}
+        {/* Conteúdo */}
         <div
-          className={`mt-8 transition-all duration-700 delay-300 ${
-            mostrarConteudo
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
+          className={`mt-6 transition-all duration-700 delay-300 ${
+            mostrarConteudo ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
-          <EstadoVazio />
+          {roteiros.length === 0 ? (
+            <EstadoVazio />
+          ) : (
+            <div className="space-y-3">
+              {roteiros.map((r) => (
+                <CardRoteiro
+                  key={r.id}
+                  roteiro={r}
+                  onDeletar={aoDeletar}
+                  deletando={deletando === r.id}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
-      {/* ── RODAPÉ ── */}
       <footer className="border-t border-tinta/10 py-4 text-center">
         <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">
           Gancho · Roteiros virais com IA

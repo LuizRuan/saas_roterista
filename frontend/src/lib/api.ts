@@ -200,9 +200,34 @@ export type AvaliacaoIA = {
   tentativas: number;
 };
 
+export type UsoRoteiros = {
+  usadosHoje: number;
+  limiteDiario: number | null;
+};
+
+export type RoteiroSalvo = {
+  id: string;
+  tema: string;
+  formato: string;
+  tom: string;
+  publico: string;
+  palavraChave: string;
+  gancho: string;
+  problema: string;
+  virada: string;
+  prova: string;
+  cta: string;
+  notas: NotasAvaliacao;
+  notaFinal: number;
+  aprovado: boolean;
+  tentativas: number;
+  criadoEm: string;
+};
+
 export type ResultadoGeracao = {
-  roteiro: RoteiroIA;
+  roteiro: RoteiroSalvo;
   avaliacao: AvaliacaoIA;
+  uso: UsoRoteiros;
 };
 
 export async function gerarRoteiro(dados: {
@@ -216,4 +241,15 @@ export async function gerarRoteiro(dados: {
     method: "POST",
     body: JSON.stringify(dados),
   });
+}
+
+export async function listarMeusRoteiros(): Promise<{
+  roteiros: RoteiroSalvo[];
+  uso: UsoRoteiros;
+}> {
+  return requisicao<{ roteiros: RoteiroSalvo[]; uso: UsoRoteiros }>("/roteiros/meus");
+}
+
+export async function deletarMeuRoteiro(id: string): Promise<void> {
+  await requisicao<null>(`/roteiros/${id}`, { method: "DELETE" });
 }
