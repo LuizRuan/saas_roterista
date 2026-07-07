@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { sair, usuarioAtual, listarMeusRoteiros, type Usuario, type UsoRoteiros } from "@/lib/api";
+import { CabecalhoApp } from "@/components/app/cabecalho-app";
+import { RodapeApp } from "@/components/app/rodape-app";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,52 +323,15 @@ export function Painel() {
   return (
     <div ref={painelRef} className="min-h-screen bg-papel">
       {/* ── CABEÇALHO ── */}
-      <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="rec-pulso inline-block size-2.5 rounded-full bg-rec"
-            />
-            <span className="font-display text-xl tracking-wide">GANCHO</span>
-          </Link>
-
-          <nav className="hidden items-center gap-6 sm:flex">
-            <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">
-              Início
-            </span>
-            <Link
-              href="/designer"
-              className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
-            >
-              Designer
-            </Link>
-            {usuario?.papel === "admin" && (
-              <Link
-                href="/admin"
-                className="flex items-center gap-1.5 rounded bg-rec px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel transition-opacity hover:opacity-80"
-              >
-                Admin
-              </Link>
-            )}
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {primeiroNome} · plano{" "}
-              <span className="font-semibold text-tinta">{usuario?.plano}</span>
-            </p>
-            <button
-              type="button"
-              onClick={aoSair}
-              disabled={saindo}
-              className="font-mono text-xs uppercase tracking-widest text-tinta-suave underline decoration-marca decoration-2 underline-offset-4 hover:text-tinta disabled:opacity-60"
-            >
-              {saindo ? "Saindo…" : "Sair"}
-            </button>
-          </div>
-        </div>
-      </header>
+      <CabecalhoApp
+        usuario={usuario}
+        saindo={saindo}
+        aoSair={aoSair}
+        itensNav={[
+          { rotulo: "Início", ativo: true },
+          { rotulo: "Designer", href: "/designer" },
+        ]}
+      />
 
       {/* ── CORPO ── */}
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-10 sm:px-6">
@@ -540,11 +505,7 @@ export function Painel() {
       </main>
 
       {/* ── RODAPÉ ── */}
-      <footer className="border-t border-tinta/10 py-4 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">
-          Gancho · Roteiros virais com IA
-        </p>
-      </footer>
+      <RodapeApp />
     </div>
   );
 }

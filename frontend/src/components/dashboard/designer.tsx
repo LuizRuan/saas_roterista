@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { sair, usuarioAtual, gerarRoteiro as gerarRoteiroApi, listarMeusRoteiros, ErroApi, type Usuario, type AvaliacaoIA, type UsoRoteiros } from "@/lib/api";
+import { CabecalhoApp } from "@/components/app/cabecalho-app";
+import { CampoSublinhado } from "@/components/app/campo-sublinhado";
+import { RodapeApp } from "@/components/app/rodape-app";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -276,41 +279,16 @@ export function Designer() {
   return (
     <div className="min-h-screen bg-papel">
       {/* ── CABEÇALHO ── */}
-      <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span aria-hidden className="rec-pulso inline-block size-2.5 rounded-full bg-rec" />
-            <span className="font-display text-xl tracking-wide">GANCHO</span>
-          </Link>
-
-          <nav className="hidden items-center gap-6 sm:flex">
-            <Link
-              href="/dashboard"
-              className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
-            >
-              ← Voltar
-            </Link>
-            <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">
-              Designer
-            </span>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {usuario?.nome?.split(" ")[0]} · plano{" "}
-              <span className="font-semibold text-tinta">{usuario?.plano}</span>
-            </p>
-            <button
-              type="button"
-              onClick={aoSair}
-              disabled={saindo}
-              className="font-mono text-xs uppercase tracking-widest text-tinta-suave underline decoration-marca decoration-2 underline-offset-4 hover:text-tinta disabled:opacity-60"
-            >
-              {saindo ? "Saindo…" : "Sair"}
-            </button>
-          </div>
-        </div>
-      </header>
+      <CabecalhoApp
+        usuario={usuario}
+        saindo={saindo}
+        aoSair={aoSair}
+        itensNav={[
+          { rotulo: "← Voltar", href: "/dashboard" },
+          { rotulo: "Designer", ativo: true },
+        ]}
+        badgeAdmin="nenhum"
+      />
 
       {/* ── CORPO ── */}
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-12 sm:px-6">
@@ -343,14 +321,15 @@ export function Designer() {
                 </legend>
                 <TagContador atual={temaTamanho} maximo={280} />
               </div>
-              <textarea
+              <CampoSublinhado
                 id="campo-tema"
-                rows={4}
-                maxLength={320}
+                rotulo="Tema / Ideia central"
+                mostrarRotulo={false}
+                linhas={4}
+                maximo={280}
                 placeholder="Ex: Por que a maioria das pessoas não consegue economizar dinheiro mesmo ganhando bem…"
-                value={config.tema}
-                onChange={(e) => atualizarConfig("tema", e.target.value)}
-                className="w-full resize-none rounded-none border-b-2 border-tinta/20 bg-transparent px-0 py-2 text-sm leading-relaxed placeholder:text-cinza focus:border-tinta focus:outline-none"
+                valor={config.tema}
+                onChange={(v) => atualizarConfig("tema", v)}
               />
             </fieldset>
 
@@ -374,7 +353,7 @@ export function Designer() {
                   >
                     {f.label}
                     <span
-                      className={`rounded px-1 text-[10px] font-bold ${
+                      className={`rounded-sm px-1 text-[10px] font-bold ${
                         config.formato === f.valor ? "bg-marca text-tinta" : "bg-tinta/10"
                       }`}
                     >
@@ -440,41 +419,23 @@ export function Designer() {
                 Detalhes opcionais
               </legend>
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="campo-publico"
-                  className="font-mono text-xs uppercase tracking-widest text-tinta-suave"
-                >
-                  Público-alvo
-                </label>
-                <input
-                  id="campo-publico"
-                  type="text"
-                  maxLength={80}
-                  placeholder="Ex: empreendedores de 25–40 anos, iniciantes em finanças…"
-                  value={config.publico}
-                  onChange={(e) => atualizarConfig("publico", e.target.value)}
-                  className="w-full border-b border-tinta/15 bg-transparent py-1.5 text-sm placeholder:text-cinza focus:border-tinta focus:outline-none"
-                />
-              </div>
+              <CampoSublinhado
+                id="campo-publico"
+                rotulo="Público-alvo"
+                maxLength={80}
+                placeholder="Ex: empreendedores de 25–40 anos, iniciantes em finanças…"
+                valor={config.publico}
+                onChange={(v) => atualizarConfig("publico", v)}
+              />
 
-              <div className="space-y-1">
-                <label
-                  htmlFor="campo-palavra-chave"
-                  className="font-mono text-xs uppercase tracking-widest text-tinta-suave"
-                >
-                  Palavra-chave / Gancho principal
-                </label>
-                <input
-                  id="campo-palavra-chave"
-                  type="text"
-                  maxLength={60}
-                  placeholder="Ex: extrato de 90 dias, segredo dos ricos…"
-                  value={config.palavraChave}
-                  onChange={(e) => atualizarConfig("palavraChave", e.target.value)}
-                  className="w-full border-b border-tinta/15 bg-transparent py-1.5 text-sm placeholder:text-cinza focus:border-tinta focus:outline-none"
-                />
-              </div>
+              <CampoSublinhado
+                id="campo-palavra-chave"
+                rotulo="Palavra-chave / Gancho principal"
+                maxLength={60}
+                placeholder="Ex: extrato de 90 dias, segredo dos ricos…"
+                valor={config.palavraChave}
+                onChange={(v) => atualizarConfig("palavraChave", v)}
+              />
             </fieldset>
 
             {/* Botão gerar */}
@@ -529,7 +490,7 @@ export function Designer() {
                       {uso.usadosHoje}/{uso.limiteDiario} roteiros hoje
                     </span>
                   ) : (
-                    <span className="rounded bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
+                    <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
                       Admin · Ilimitado
                     </span>
                   )}
@@ -597,7 +558,7 @@ export function Designer() {
                     <span className="font-mono text-xs font-semibold uppercase tracking-widest text-tinta">
                       Roteiro
                     </span>
-                    <span className="rounded bg-tinta/8 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cinza">
+                    <span className="rounded-sm bg-tinta/8 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-cinza">
                       {FORMATOS.find((f) => f.valor === config.formato)?.label}{" "}
                       {FORMATOS.find((f) => f.valor === config.formato)?.duracao}
                     </span>
@@ -638,7 +599,7 @@ export function Designer() {
                 {avaliacao && (
                   <div className="border-t border-tinta/10 bg-tinta/3 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
+                      <span className={`rounded-sm px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
                         avaliacao.aprovado
                           ? "bg-marca text-tinta"
                           : "bg-rec/20 text-rec"
@@ -704,11 +665,7 @@ export function Designer() {
       </main>
 
       {/* ── RODAPÉ MÍNIMO ── */}
-      <footer className="border-t border-tinta/10 py-4 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">
-          Gancho · Roteiros virais com IA
-        </p>
-      </footer>
+      <RodapeApp />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usuarioAtual, sair, listarPadroes, type Usuario, type PadraoViral } from "@/lib/api";
 import { FormularioPadrao } from "@/components/admin/formulario-padrao";
+import { CabecalhoApp } from "@/components/app/cabecalho-app";
+import { RodapeApp } from "@/components/app/rodape-app";
 
 export default function PaginaEditarPadrao() {
   const router = useRouter();
@@ -69,29 +71,17 @@ export default function PaginaEditarPadrao() {
 
   return (
     <div className="min-h-screen bg-papel">
-      <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <span aria-hidden className="rec-pulso inline-block size-2.5 rounded-full bg-rec" />
-              <span className="font-display text-xl tracking-wide">GANCHO</span>
-            </Link>
-            <span className="rounded bg-rec px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">Admin</span>
-          </div>
-          <nav className="hidden items-center gap-6 sm:flex">
-            <Link href="/admin" className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta">Padrões</Link>
-            <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">Editar</span>
-          </nav>
-          <div className="flex items-center gap-4">
-            <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {usuario?.nome?.split(" ")[0]} · admin
-            </p>
-            <button type="button" onClick={aoSair} disabled={saindo} className="font-mono text-xs uppercase tracking-widest text-tinta-suave underline decoration-marca decoration-2 underline-offset-4 hover:text-tinta disabled:opacity-60">
-              {saindo ? "Saindo…" : "Sair"}
-            </button>
-          </div>
-        </div>
-      </header>
+      <CabecalhoApp
+        usuario={usuario}
+        saindo={saindo}
+        aoSair={aoSair}
+        itensNav={[
+          { rotulo: "Padrões", href: "/admin" },
+          { rotulo: "Editar", ativo: true },
+        ]}
+        badgeAdmin="logo-sempre"
+        textoUsuario={<>{usuario?.nome?.split(" ")[0]} · admin</>}
+      />
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-10 sm:px-6">
         <p className="font-mono text-xs font-semibold uppercase tracking-widest text-rec">[Editar padrão]</p>
@@ -105,9 +95,7 @@ export default function PaginaEditarPadrao() {
         </div>
       </main>
 
-      <footer className="border-t border-tinta/10 py-4 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">Gancho · Painel Admin</p>
-      </footer>
+      <RodapeApp texto="Gancho · Painel Admin" />
     </div>
   );
 }

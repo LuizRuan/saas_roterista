@@ -12,6 +12,9 @@ import {
   type RoteiroSalvo,
   type UsoRoteiros,
 } from "@/lib/api";
+import { CabecalhoApp } from "@/components/app/cabecalho-app";
+import { RodapeApp } from "@/components/app/rodape-app";
+import { useConfirmacao } from "@/hooks/use-confirmacao";
 
 // ---------------------------------------------------------------------------
 // Labels
@@ -110,14 +113,14 @@ function CardRoteiro({
             {roteiro.tema}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="rounded border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
+            <span className="rounded-sm border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
               {FORMATO_LABEL[roteiro.formato] ?? roteiro.formato}
             </span>
-            <span className="rounded border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
+            <span className="rounded-sm border border-tinta/10 px-1.5 py-0.5 font-mono text-[10px] text-cinza">
               {TOM_LABEL[roteiro.tom] ?? roteiro.tom}
             </span>
             <span
-              className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
+              className={`rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
                 roteiro.aprovado
                   ? "bg-marca/20 text-tinta"
                   : "bg-rec/10 text-rec"
@@ -216,6 +219,8 @@ export function MeusRoteiros() {
   const [saindo, setSaindo] = useState(false);
   const [deletando, setDeletando] = useState<string | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
+  const [erroGeral, setErroGeral] = useState<string | null>(null);
+  const { confirmar, elemento: modalConfirmacao } = useConfirmacao();
 
   useEffect(() => {
     let ativo = true;
@@ -246,13 +251,18 @@ export function MeusRoteiros() {
   }
 
   async function aoDeletar(id: string) {
-    if (!confirm("Tem certeza que quer deletar este roteiro?")) return;
+    const ok = await confirmar({
+      titulo: "Deletar este roteiro?",
+      descricao: "Essa ação não pode ser desfeita.",
+      rotuloConfirmar: "Deletar",
+    });
+    if (!ok) return;
     setDeletando(id);
     try {
       await deletarMeuRoteiro(id);
       setRoteiros((prev) => prev.filter((r) => r.id !== id));
     } catch {
-      alert("Não foi possível deletar.");
+      setErroGeral("Não foi possível deletar o roteiro.");
     } finally {
       setDeletando(null);
     }
@@ -272,50 +282,33 @@ export function MeusRoteiros() {
   return (
     <div className="min-h-screen bg-papel">
       {/* ── CABEÇALHO ── */}
-      <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span aria-hidden className="rec-pulso inline-block size-2.5 rounded-full bg-rec" />
-            <span className="font-display text-xl tracking-wide">GANCHO</span>
-          </Link>
-
-          <nav className="hidden items-center gap-6 sm:flex">
-            <Link
-              href="/dashboard"
-              className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
-            >
-              ← Voltar
-            </Link>
-            <Link
-              href="/designer"
-              className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
-            >
-              Designer
-            </Link>
-            <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">
-              Meus Roteiros
-            </span>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {usuario?.nome?.split(" ")[0]} · plano{" "}
-              <span className="font-semibold text-tinta">{usuario?.plano}</span>
-            </p>
-            <button
-              type="button"
-              onClick={aoSair}
-              disabled={saindo}
-              className="font-mono text-xs uppercase tracking-widest text-tinta-suave underline decoration-marca decoration-2 underline-offset-4 hover:text-tinta disabled:opacity-60"
-            >
-              {saindo ? "Saindo…" : "Sair"}
-            </button>
-          </div>
-        </div>
-      </header>
+      <CabecalhoApp
+        usuario={usuario}
+        saindo={saindo}
+        aoSair={aoSair}
+        itensNav={[
+          { rotulo: "← Voltar", href: "/dashboard" },
+          { rotulo: "Designer", href: "/designer" },
+          { rotulo: "Meus Roteiros", ativo: true },
+        ]}
+        badgeAdmin="nenhum"
+      />
 
       {/* ── CORPO ── */}
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-10 sm:px-6">
+
+        {/* Erro geral */}
+        {erroGeral && (
+          <p
+            role="alert"
+            className="mb-6 rounded-sm border border-rec/40 bg-rec/10 px-4 py-3 font-mono text-xs font-medium text-rec"
+          >
+            {erroGeral}{" "}
+            <button onClick={() => setErroGeral(null)} className="underline">
+              Fechar
+            </button>
+          </p>
+        )}
 
         {/* Cabeçalho */}
         <div
@@ -359,7 +352,7 @@ export function MeusRoteiros() {
               {uso.limiteDiario === null && (
                 <>
                   <span className="text-cinza">·</span>
-                  <span className="rounded bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
+                  <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
                     Admin · Ilimitado
                   </span>
                 </>
@@ -407,11 +400,8 @@ export function MeusRoteiros() {
         </div>
       </main>
 
-      <footer className="border-t border-tinta/10 py-4 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">
-          Gancho · Roteiros virais com IA
-        </p>
-      </footer>
+      <RodapeApp />
+      {modalConfirmacao}
     </div>
   );
 }

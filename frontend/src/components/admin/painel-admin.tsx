@@ -12,6 +12,9 @@ import {
   type Usuario,
   type PadraoViral,
 } from "@/lib/api";
+import { CabecalhoApp } from "@/components/app/cabecalho-app";
+import { RodapeApp } from "@/components/app/rodape-app";
+import { useConfirmacao } from "@/hooks/use-confirmacao";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,7 +64,7 @@ function CardEstatistica({
 function BadgeStatus({ ativo }: { ativo: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider ${
+      className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider ${
         ativo ? "bg-tinta/8 text-tinta" : "bg-tinta/5 text-cinza"
       }`}
     >
@@ -87,6 +90,7 @@ export function PainelAdmin() {
   const [toggleando, setToggleando] = useState<string | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
   const [erroGeral, setErroGeral] = useState<string | null>(null);
+  const { confirmar, elemento: modalConfirmacao } = useConfirmacao();
 
   useEffect(() => {
     let ativo = true;
@@ -140,7 +144,12 @@ export function PainelAdmin() {
   }
 
   async function aoDeletar(id: string) {
-    if (!confirm("Tem certeza que quer deletar este padrão? Não tem como desfazer.")) return;
+    const ok = await confirmar({
+      titulo: "Deletar este padrão?",
+      descricao: "Não tem como desfazer.",
+      rotuloConfirmar: "Deletar",
+    });
+    if (!ok) return;
     setDeletando(id);
     try {
       await deletarPadrao(id);
@@ -169,45 +178,17 @@ export function PainelAdmin() {
   return (
     <div className="min-h-screen bg-papel">
       {/* ── CABEÇALHO ── */}
-      <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <span aria-hidden className="rec-pulso inline-block size-2.5 rounded-full bg-rec" />
-              <span className="font-display text-xl tracking-wide">GANCHO</span>
-            </Link>
-            <span className="rounded bg-rec px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
-              Admin
-            </span>
-          </div>
-
-          <nav className="hidden items-center gap-6 sm:flex">
-            <Link
-              href="/dashboard"
-              className="font-mono text-xs uppercase tracking-widest text-cinza transition-colors hover:text-tinta"
-            >
-              Dashboard
-            </Link>
-            <span className="font-mono text-xs uppercase tracking-widest text-tinta underline decoration-marca decoration-2 underline-offset-4">
-              Padrões Virais
-            </span>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <p className="hidden font-mono text-xs uppercase tracking-widest text-tinta-suave sm:block">
-              {usuario?.nome?.split(" ")[0]} · admin
-            </p>
-            <button
-              type="button"
-              onClick={aoSair}
-              disabled={saindo}
-              className="font-mono text-xs uppercase tracking-widest text-tinta-suave underline decoration-marca decoration-2 underline-offset-4 hover:text-tinta disabled:opacity-60"
-            >
-              {saindo ? "Saindo…" : "Sair"}
-            </button>
-          </div>
-        </div>
-      </header>
+      <CabecalhoApp
+        usuario={usuario}
+        saindo={saindo}
+        aoSair={aoSair}
+        itensNav={[
+          { rotulo: "Dashboard", href: "/dashboard" },
+          { rotulo: "Padrões Virais", ativo: true },
+        ]}
+        badgeAdmin="logo-sempre"
+        textoUsuario={<>{usuario?.nome?.split(" ")[0]} · admin</>}
+      />
 
       {/* ── CORPO ── */}
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-10 sm:px-6">
@@ -216,7 +197,7 @@ export function PainelAdmin() {
         {erroGeral && (
           <p
             role="alert"
-            className="mb-6 rounded border border-rec/40 bg-rec/10 px-4 py-3 font-mono text-xs font-medium text-rec"
+            className="mb-6 rounded-sm border border-rec/40 bg-rec/10 px-4 py-3 font-mono text-xs font-medium text-rec"
           >
             {erroGeral}{" "}
             <button
@@ -347,11 +328,11 @@ export function PainelAdmin() {
                     </p>
                   </div>
 
-                  <span className="hidden rounded border border-tinta/10 px-2 py-0.5 font-mono text-[10px] text-cinza sm:block">
+                  <span className="hidden rounded-sm border border-tinta/10 px-2 py-0.5 font-mono text-[10px] text-cinza sm:block">
                     {FORMATO_LABEL[padrao.formato] ?? padrao.formato}
                   </span>
 
-                  <span className="hidden rounded border border-tinta/10 px-2 py-0.5 font-mono text-[10px] text-cinza sm:block">
+                  <span className="hidden rounded-sm border border-tinta/10 px-2 py-0.5 font-mono text-[10px] text-cinza sm:block">
                     {TOM_LABEL[padrao.tom] ?? padrao.tom}
                   </span>
 
@@ -397,11 +378,8 @@ export function PainelAdmin() {
         </div>
       </main>
 
-      <footer className="border-t border-tinta/10 py-4 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-cinza">
-          Gancho · Painel Admin
-        </p>
-      </footer>
+      <RodapeApp texto="Gancho · Painel Admin" />
+      {modalConfirmacao}
     </div>
   );
 }

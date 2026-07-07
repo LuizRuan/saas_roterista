@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { criarPadrao, atualizarPadrao, type PadraoViral, type PadraoViralInput } from "@/lib/api";
+import { CampoSublinhado } from "@/components/app/campo-sublinhado";
 
 // ---------------------------------------------------------------------------
 // Dados estáticos
@@ -24,97 +25,6 @@ const TONS = [
   { valor: "educativo", label: "Educativo" },
   { valor: "curioso", label: "Curioso" },
 ];
-
-// ---------------------------------------------------------------------------
-// Componentes auxiliares
-// ---------------------------------------------------------------------------
-
-function CampoTexto({
-  id,
-  rotulo,
-  dica,
-  placeholder,
-  maximo,
-  linhas = 1,
-  valor,
-  onChange,
-  erro,
-}: {
-  id: string;
-  rotulo: string;
-  dica?: string;
-  placeholder: string;
-  maximo: number;
-  linhas?: number;
-  valor: string;
-  onChange: (v: string) => void;
-  erro?: string;
-}) {
-  const perto = valor.length > maximo * 0.85;
-  const excedido = valor.length > maximo;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <label
-          htmlFor={id}
-          className="font-mono text-xs font-semibold uppercase tracking-widest text-tinta"
-        >
-          {rotulo}
-        </label>
-        <span
-          className={`font-mono text-[10px] tabular-nums transition-colors ${
-            excedido ? "text-rec font-semibold" : perto ? "text-tinta-suave" : "text-cinza"
-          }`}
-        >
-          {valor.length}/{maximo}
-        </span>
-      </div>
-
-      {dica && (
-        <p className="font-mono text-[10px] leading-snug text-cinza">{dica}</p>
-      )}
-
-      {linhas > 1 ? (
-        <textarea
-          id={id}
-          rows={linhas}
-          maxLength={maximo + 50}
-          placeholder={placeholder}
-          value={valor}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full resize-none border-b-2 bg-transparent px-0 py-2 text-sm leading-relaxed placeholder:text-cinza focus:outline-none ${
-            erro
-              ? "border-rec"
-              : excedido
-              ? "border-rec/50"
-              : "border-tinta/20 focus:border-tinta"
-          }`}
-        />
-      ) : (
-        <input
-          id={id}
-          type="text"
-          maxLength={maximo + 50}
-          placeholder={placeholder}
-          value={valor}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full border-b-2 bg-transparent px-0 py-2 text-sm placeholder:text-cinza focus:outline-none ${
-            erro
-              ? "border-rec"
-              : excedido
-              ? "border-rec/50"
-              : "border-tinta/20 focus:border-tinta"
-          }`}
-        />
-      )}
-
-      {erro && (
-        <p className="font-mono text-xs text-rec">{erro}</p>
-      )}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Componente principal
@@ -188,7 +98,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
     <form onSubmit={aoEnviar} noValidate className="space-y-10">
 
       {erroGeral && (
-        <p role="alert" className="rounded border border-rec/40 bg-rec/10 px-4 py-3 font-mono text-xs font-medium text-rec">
+        <p role="alert" className="rounded-sm border border-rec/40 bg-rec/10 px-4 py-3 font-mono text-xs font-medium text-rec">
           {erroGeral}
         </p>
       )}
@@ -199,7 +109,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           [01] Identificação
         </p>
 
-        <CampoTexto
+        <CampoSublinhado
           id="titulo"
           rotulo="Título do padrão"
           dica="Nome interno para identificar o padrão na lista (ex: 'Urgência financeira — 60s')."
@@ -263,7 +173,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           [02] Estrutura do roteiro viral
         </p>
 
-        <CampoTexto
+        <CampoSublinhado
           id="gancho"
           rotulo="Gancho (0–3s)"
           dica="A primeira frase que prende antes do swipe. Deve ser impactante e imediata."
@@ -275,7 +185,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           erro={erros.gancho}
         />
 
-        <CampoTexto
+        <CampoSublinhado
           id="problema"
           rotulo="Problema / Desenvolvimento (3–12s)"
           dica="Expande o gancho. Espelha a dor ou situação que o público reconhece."
@@ -287,7 +197,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           erro={erros.problema}
         />
 
-        <CampoTexto
+        <CampoSublinhado
           id="virada"
           rotulo="Virada / Informação (12–25s)"
           dica="A informação que surpreende ou muda a perspectiva. O coração do roteiro."
@@ -299,7 +209,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           erro={erros.virada}
         />
 
-        <CampoTexto
+        <CampoSublinhado
           id="prova"
           rotulo="Prova / Credibilidade (25–45s)"
           dica="Resultado concreto, número ou exemplo real que valida a virada."
@@ -311,7 +221,7 @@ export function FormularioPadrao({ padraoExistente }: Props) {
           erro={erros.prova}
         />
 
-        <CampoTexto
+        <CampoSublinhado
           id="cta"
           rotulo="Call to Action (45s+)"
           dica="Convite direto: salvar, comentar, seguir. Uma ação, sem ambiguidade."
