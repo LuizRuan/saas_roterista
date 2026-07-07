@@ -203,8 +203,8 @@ export type AvaliacaoIA = {
 };
 
 export type UsoRoteiros = {
-  usadosHoje: number;
-  limiteDiario: number | null;
+  usadosNoMes: number;
+  limiteMensal: number | null;
 };
 
 export type RoteiroSalvo = {

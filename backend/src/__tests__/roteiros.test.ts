@@ -89,12 +89,12 @@ const corpoGerar = {
   palavraChave: "",
 };
 
-describe("POST /roteiros/gerar — limite diário do plano free", () => {
-  it("nunca deixa passar de 3 gerações no dia mesmo com requisições concorrentes", async () => {
+describe("POST /roteiros/gerar — limite mensal do plano free", () => {
+  it("nunca deixa passar de 5 gerações no mês mesmo com requisições concorrentes", async () => {
     const { accessToken } = await criarUsuarioComToken();
 
     const respostas = await Promise.all(
-      Array.from({ length: 5 }, () =>
+      Array.from({ length: 7 }, () =>
         request(app)
           .post("/roteiros/gerar")
           .set("Authorization", `Bearer ${accessToken}`)
@@ -105,11 +105,11 @@ describe("POST /roteiros/gerar — limite diário do plano free", () => {
     const sucesso = respostas.filter((r) => r.status === 200);
     const bloqueadas = respostas.filter((r) => r.status === 429);
 
-    expect(sucesso).toHaveLength(3);
+    expect(sucesso).toHaveLength(5);
     expect(bloqueadas).toHaveLength(2);
 
     const totalNoBanco = await RoteiroModel.countDocuments({});
-    expect(totalNoBanco).toBe(3);
+    expect(totalNoBanco).toBe(5);
   });
 
   it("libera a vaga quando a geração falha, permitindo tentar de novo", async () => {
@@ -123,10 +123,10 @@ describe("POST /roteiros/gerar — limite diário do plano free", () => {
       .send(corpoGerar);
     expect(falhou.status).toBe(500);
 
-    // As 3 tentativas seguintes devem ser aceitas normalmente —
-    // a tentativa que falhou não deve ter consumido uma vaga do limite diário.
+    // As 5 tentativas seguintes devem ser aceitas normalmente —
+    // a tentativa que falhou não deve ter consumido uma vaga do limite mensal.
     const respostas = await Promise.all(
-      Array.from({ length: 3 }, () =>
+      Array.from({ length: 5 }, () =>
         request(app)
           .post("/roteiros/gerar")
           .set("Authorization", `Bearer ${accessToken}`)
@@ -198,25 +198,25 @@ describe("IDOR — um usuário não pode acessar roteiro de outro", () => {
   });
 });
 
-describe("Plano pro — sem limite diário de geração", () => {
-  it("gera mais de 3 roteiros no dia sem ser bloqueado, e a resposta traz limiteDiario: null", async () => {
+describe("Plano pro — sem limite mensal de geração", () => {
+  it("gera mais de 5 roteiros no mês sem ser bloqueado, e a resposta traz limiteMensal: null", async () => {
     const { accessToken } = await criarUsuarioProComToken();
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const res = await request(app)
         .post("/roteiros/gerar")
         .set("Authorization", `Bearer ${accessToken}`)
         .send(corpoGerar);
 
       expect(res.status).toBe(200);
-      expect(res.body.uso.limiteDiario).toBeNull();
+      expect(res.body.uso.limiteMensal).toBeNull();
     }
   });
 
-  it("GET /roteiros/meus devolve limiteDiario: null para quem já gerou mais de 3 no dia", async () => {
+  it("GET /roteiros/meus devolve limiteMensal: null para quem já gerou mais de 5 no mês", async () => {
     const { accessToken } = await criarUsuarioProComToken();
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       await request(app)
         .post("/roteiros/gerar")
         .set("Authorization", `Bearer ${accessToken}`)
@@ -228,7 +228,7 @@ describe("Plano pro — sem limite diário de geração", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.uso.limiteDiario).toBeNull();
-    expect(res.body.uso.usadosHoje).toBe(4);
+    expect(res.body.uso.limiteMensal).toBeNull();
+    expect(res.body.uso.usadosNoMes).toBe(6);
   });
 });

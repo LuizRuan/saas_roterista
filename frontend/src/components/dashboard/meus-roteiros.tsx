@@ -335,21 +335,21 @@ export function MeusRoteiros() {
             mostrarConteudo ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
-          {/* Uso diário */}
+          {/* Uso mensal */}
           {uso && (
             <div className="flex items-center gap-3">
               <span className="font-mono text-xs tabular-nums text-cinza">
                 {roteiros.length} roteiro{roteiros.length !== 1 ? "s" : ""} salvo{roteiros.length !== 1 ? "s" : ""}
               </span>
-              {uso.limiteDiario != null && (
+              {uso.limiteMensal != null && (
                 <>
                   <span className="text-cinza">·</span>
                   <span className="font-mono text-xs tabular-nums text-tinta-suave">
-                    {uso.usadosHoje}/{uso.limiteDiario} hoje
+                    {uso.usadosNoMes}/{uso.limiteMensal} este mês
                   </span>
                 </>
               )}
-              {uso.limiteDiario === null && (
+              {uso.limiteMensal === null && (
                 <>
                   <span className="text-cinza">·</span>
                   <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">

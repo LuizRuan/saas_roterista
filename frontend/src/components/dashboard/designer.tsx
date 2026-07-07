@@ -158,7 +158,7 @@ export function Designer() {
         if (!u) { router.replace("/login"); return; }
         setUsuario(u);
 
-        // Carregar uso diário
+        // Carregar uso mensal
         try {
           const dados = await listarMeusRoteiros();
           if (ativo) setUso(dados.uso);
@@ -270,7 +270,7 @@ export function Designer() {
 
   const temaTamanho = config.tema.length;
   const podeCriar = temaTamanho > 0 && temaTamanho <= 280;
-  const limiteAtingido = uso && uso.limiteDiario !== null && uso.usadosHoje >= uso.limiteDiario;
+  const limiteAtingido = uso && uso.limiteMensal !== null && uso.usadosNoMes >= uso.limiteMensal;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -463,7 +463,7 @@ export function Designer() {
                   {limiteAtingido ? (
                     <>
                       <span aria-hidden className="inline-block size-2 rounded-full bg-rec" />
-                      Limite diário atingido
+                      Limite mensal atingido
                     </>
                   ) : etapa === "ocioso" ? (
                     <>
@@ -483,11 +483,11 @@ export function Designer() {
               {/* Contador de uso */}
               {uso && (
                 <div className="mt-4 flex items-center gap-3">
-                  {uso.limiteDiario !== null ? (
+                  {uso.limiteMensal !== null ? (
                     <span className={`font-mono text-xs tabular-nums ${
                       limiteAtingido ? "font-semibold text-rec" : "text-cinza"
                     }`}>
-                      {uso.usadosHoje}/{uso.limiteDiario} roteiros hoje
+                      {uso.usadosNoMes}/{uso.limiteMensal} roteiros neste mês
                     </span>
                   ) : (
                     <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">

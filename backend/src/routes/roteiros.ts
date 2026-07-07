@@ -8,10 +8,10 @@ import { UsuarioModel } from "../models/usuario";
 import { executarPipeline } from "../services/ia/pipeline";
 import { getPadroesAtivos } from "../services/cache-padroes";
 import { agendarLimpezaRoteiros } from "../services/cleanup";
-import { reservarUsoDiario, liberarUsoDiario } from "../services/uso-diario";
+import { reservarUsoMensal, liberarUsoMensal, inicioDoMes } from "../services/uso-mensal";
 import { env } from "../config/env";
 
-const LIMITE_DIARIO_FREE = 3;
+const LIMITE_MENSAL_FREE = 5;
 
 /** Envolve handler async para o Express 4 capturar erros rejeitados. */
 function rotaAsync(handler: RequestHandler): RequestHandler {
@@ -22,8 +22,8 @@ function rotaAsync(handler: RequestHandler): RequestHandler {
 
 /**
  * Limite por usuário (com fallback por IP) na rota de geração — o contador
- * diário em uso-diario.ts já trava o plano free, mas nada limitava rajadas
- * de chamadas caras à IA (nem para contas admin, sem limite diário).
+ * mensal em uso-mensal.ts já trava o plano free, mas nada limitava rajadas
+ * de chamadas caras à IA (nem para contas admin, sem limite mensal).
  */
 const limiteGeracao = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -54,7 +54,7 @@ export const roteirosRouter = Router();
 
 /**
  * POST /roteiros/gerar
- * C1: plano vem do documento já buscado por reservarUsoDiario — sem query extra
+ * C1: plano vem do documento já buscado por reservarUsoMensal — sem query extra
  * C4: padrões virais vêm do cache (5 min)
  * M2: Cache-Control explícito
  */
@@ -76,22 +76,22 @@ roteirosRouter.post(
     const usuarioId = req.usuarioId!;
     const papel = req.usuarioPapel;
 
-    // Reserva atômica da vaga diária — fecha a race condition de
-    // requisições concorrentes (ver services/uso-diario.ts). Continua rodando
+    // Reserva atômica da vaga mensal — fecha a race condition de
+    // requisições concorrentes (ver services/uso-mensal.ts). Continua rodando
     // pra plano "pro" (pra manter o contador de uso correto), mas só bloqueia
     // quem não é admin nem pro.
-    let usadosHoje = 0;
+    let usadosNoMes = 0;
     let ilimitado = papel === "admin";
     if (papel !== "admin") {
-      const reserva = await reservarUsoDiario(usuarioId);
-      usadosHoje = reserva.quantidade;
+      const reserva = await reservarUsoMensal(usuarioId);
+      usadosNoMes = reserva.quantidade;
       ilimitado = reserva.plano === "pro";
 
-      if (!ilimitado && usadosHoje > LIMITE_DIARIO_FREE) {
+      if (!ilimitado && usadosNoMes > LIMITE_MENSAL_FREE) {
         res.status(429).json({
-          erro: `Você atingiu o limite de ${LIMITE_DIARIO_FREE} roteiros por dia no plano gratuito.`,
-          limite: LIMITE_DIARIO_FREE,
-          usados: LIMITE_DIARIO_FREE,
+          erro: `Você atingiu o limite de ${LIMITE_MENSAL_FREE} roteiros por mês no plano gratuito. Novos roteiros liberam no próximo mês.`,
+          limite: LIMITE_MENSAL_FREE,
+          usados: LIMITE_MENSAL_FREE,
         });
         return;
       }
@@ -106,8 +106,8 @@ roteirosRouter.post(
       resultado = await executarPipeline(config, padroes);
     } catch (erro) {
       // Geração falhou — libera a vaga reservada para não consumir o limite
-      // diário do usuário por uma falha da IA.
-      if (papel !== "admin") await liberarUsoDiario(usuarioId);
+      // mensal do usuário por uma falha da IA.
+      if (papel !== "admin") await liberarUsoMensal(usuarioId);
       throw erro;
     }
 
@@ -138,8 +138,8 @@ roteirosRouter.post(
         tentativas: resultado.tentativas,
       },
       uso: {
-        usadosHoje: papel === "admin" ? 0 : usadosHoje,
-        limiteDiario: ilimitado ? null : LIMITE_DIARIO_FREE,
+        usadosNoMes: papel === "admin" ? 0 : usadosNoMes,
+        limiteMensal: ilimitado ? null : LIMITE_MENSAL_FREE,
       },
     });
   })
@@ -165,12 +165,10 @@ roteirosRouter.get(
       .limit(50)
       .select("tema formato tom notaFinal aprovado tentativas notas criadoEm createdAt");
 
-    // Uso diário
-    const inicioHoje = new Date();
-    inicioHoje.setHours(0, 0, 0, 0);
-    const usadosHoje = await RoteiroModel.countDocuments({
+    // Uso mensal
+    const usadosNoMes = await RoteiroModel.countDocuments({
       usuarioId: req.usuarioId,
-      createdAt: { $gte: inicioHoje },
+      createdAt: { $gte: inicioDoMes() },
     });
 
     // Query isolada e pequena — só pra saber se o plano é "pro" (sem limite).
@@ -180,8 +178,8 @@ roteirosRouter.get(
     res.json({
       roteiros: roteiros.map(roteiroPublico),
       uso: {
-        usadosHoje,
-        limiteDiario: ilimitado ? null : LIMITE_DIARIO_FREE,
+        usadosNoMes,
+        limiteMensal: ilimitado ? null : LIMITE_MENSAL_FREE,
       },
     });
   })

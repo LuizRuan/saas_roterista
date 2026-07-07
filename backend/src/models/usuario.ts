@@ -22,10 +22,10 @@ const usuarioSchema = new Schema(
     // consentimento (LGPD). Guarda a data, não só um boolean, para provar
     // qual versão vigente o usuário aceitou.
     termosAceitosEm: { type: Date, default: null },
-    // Contador atômico de roteiros gerados no dia — usado para aplicar o
-    // limite diário do plano free sem race condition (ver reservarUsoDiario).
-    usoRoteirosDiario: {
-      dia: { type: Date, default: null },
+    // Contador atômico de roteiros gerados no mês — usado para aplicar o
+    // limite mensal do plano free sem race condition (ver reservarUsoMensal).
+    usoRoteirosMensal: {
+      mes: { type: Date, default: null },
       quantidade: { type: Number, default: 0 },
     },
   },
