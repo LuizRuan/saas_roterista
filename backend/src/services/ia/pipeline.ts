@@ -1,6 +1,10 @@
 import { criarRoteiro, type ConfigCriacao, type RoteiroGerado } from "./criador";
 import { avaliarRoteiro, type AvaliacaoRoteiro } from "./critico";
 import type { PadraoViralDoc } from "../../models/padraoViral";
+import { logger } from "../../lib/logger";
+
+/** M3: nível info — o logger já silencia detalhes verbosos em produção via formato JSON. */
+const log = (mensagem: string) => logger.info("pipeline", mensagem);
 
 /**
  * Pipeline multi-agente:
@@ -27,21 +31,19 @@ export async function executarPipeline(
   let ultimaAvaliacao: AvaliacaoRoteiro | null = null;
 
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    console.log(`[pipeline] Tentativa ${tentativa}/${MAX_TENTATIVAS} — criando roteiro...`);
+    log(`Tentativa ${tentativa}/${MAX_TENTATIVAS} — criando roteiro...`);
 
     // Agente Criador gera (ou reescreve)
     const roteiro = await criarRoteiro(config, padroes, feedbackMelhoria);
     ultimoRoteiro = roteiro;
 
-    console.log(`[pipeline] Tentativa ${tentativa}/${MAX_TENTATIVAS} — avaliando...`);
+    log(`Tentativa ${tentativa}/${MAX_TENTATIVAS} — avaliando...`);
 
     // Agente Crítico avalia
     const avaliacao = await avaliarRoteiro(roteiro, config);
     ultimaAvaliacao = avaliacao;
 
-    console.log(
-      `[pipeline] Tentativa ${tentativa} — nota: ${avaliacao.notaFinal} (${avaliacao.aprovado ? "APROVADO" : "REPROVADO"})`
-    );
+    log(`Tentativa ${tentativa} — nota: ${avaliacao.notaFinal} (${avaliacao.aprovado ? "APROVADO" : "REPROVADO"})`);
 
     // Aprovado → retorna
     if (avaliacao.aprovado) {

@@ -37,6 +37,9 @@ const padraoViralSchema = new Schema(
 export type PadraoViral = InferSchemaType<typeof padraoViralSchema>;
 export type PadraoViralDoc = HydratedDocument<PadraoViral>;
 
+// P4: índice para `find({ ativo: true }).sort({ createdAt: -1 })` — roda a cada geração
+padraoViralSchema.index({ ativo: 1, createdAt: -1 });
+
 export const PadraoViralModel = model("PadraoViral", padraoViralSchema);
 
 /** Forma pública do padrão — usada nas respostas da API. */

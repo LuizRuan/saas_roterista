@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { sair, usuarioAtual, type Usuario } from "@/lib/api";
+import { sair, usuarioAtual, listarMeusRoteiros, type Usuario, type UsoRoteiros } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -257,32 +257,37 @@ function BarraProgresso({
 export function Painel() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [uso, setUso] = useState<UsoRoteiros | null>(null);
+  const [totalRoteiros, setTotalRoteiros] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [saindo, setSaindo] = useState(false);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
   const painelRef = useRef<HTMLDivElement>(null);
 
-  // Auth guard
+  // I1: Auth guard + dados de uso em paralelo (um único round-trip de espera)
   useEffect(() => {
     let ativo = true;
-    usuarioAtual()
-      .then((u) => {
+    async function init() {
+      try {
+        const [u, dadosRoteiros] = await Promise.all([
+          usuarioAtual(),
+          listarMeusRoteiros().catch(() => null),
+        ]);
         if (!ativo) return;
-        if (u) {
-          setUsuario(u);
-          setCarregando(false);
-          // Animação escalonada de entrada
-          setTimeout(() => setMostrarConteudo(true), 100);
-        } else {
-          router.replace("/login");
+        if (!u) { router.replace("/login"); return; }
+        setUsuario(u);
+        if (dadosRoteiros) {
+          setUso(dadosRoteiros.uso);
+          setTotalRoteiros(dadosRoteiros.roteiros.length);
         }
-      })
-      .catch(() => {
+        setCarregando(false);
+        setTimeout(() => setMostrarConteudo(true), 100);
+      } catch {
         if (ativo) router.replace("/login");
-      });
-    return () => {
-      ativo = false;
-    };
+      }
+    }
+    init();
+    return () => { ativo = false; };
   }, [router]);
 
   async function aoSair() {
@@ -398,14 +403,14 @@ export function Painel() {
         >
           <CardMetrica
             label="Roteiros criados"
-            valor={0}
-            detalhe="Crie o primeiro →"
+            valor={totalRoteiros}
+            detalhe={totalRoteiros === 0 ? "Crie o primeiro →" : `${totalRoteiros} no histórico`}
             destaque
           />
           <CardMetrica
-            label="Ganchos salvos"
-            valor={0}
-            detalhe="Seus melhores hooks"
+            label="Hoje"
+            valor={uso ? `${uso.usadosHoje}/${uso.limiteDiario ?? "∞"}` : "0"}
+            detalhe={uso?.limiteDiario ? "roteiros do limite" : "Admin · Ilimitado"}
           />
           <CardMetrica
             label="Dias no estúdio"
@@ -447,8 +452,12 @@ export function Painel() {
             )}
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <BarraProgresso label="Roteiros hoje" atual={0} maximo={eFree ? 3 : 999} />
-            <BarraProgresso label="Ganchos salvos" atual={0} maximo={eFree ? 10 : 999} />
+            <BarraProgresso
+              label="Roteiros hoje"
+              atual={uso?.usadosHoje ?? 0}
+              maximo={uso?.limiteDiario ?? (eFree ? 3 : 999)}
+            />
+            <BarraProgresso label="Histórico total" atual={totalRoteiros} maximo={30} />
           </div>
         </div>
 

@@ -1,16 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-/** Moldura das telas de cadastro/login: card estilo "arquivo de roteiro". */
+/** Moldura das telas de cadastro/login: card estilo editorial. */
 export function MolduraAuth({
-  arquivo,
   titulo,
   subtitulo,
   children,
   rodape,
 }: {
-  /** Nome mostrado na barra do card, ex.: "cadastro.txt" */
-  arquivo: string;
   titulo: ReactNode;
   subtitulo: string;
   children: ReactNode;
@@ -27,16 +24,6 @@ export function MolduraAuth({
       </Link>
 
       <div className="w-full max-w-md rounded-lg border border-tinta/15 bg-papel-card shadow-[6px_6px_0_0_rgba(19,18,16,0.12)]">
-        <div className="flex items-center justify-between border-b border-tinta/10 px-5 py-2.5">
-          <p className="font-mono text-xs text-tinta-suave">{arquivo}</p>
-          <p className="flex items-center gap-1.5 font-mono text-xs font-semibold uppercase text-rec">
-            <span
-              aria-hidden
-              className="rec-pulso inline-block size-2 rounded-full bg-rec"
-            />
-            Rec
-          </p>
-        </div>
 
         <div className="px-5 py-7 sm:px-7">
           <h1 className="font-display text-3xl tracking-tight sm:text-4xl">

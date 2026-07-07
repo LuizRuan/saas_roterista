@@ -68,6 +68,8 @@ export async function cadastrar(dados: {
   nome: string;
   email: string;
   senha: string;
+  aceitouTermos: boolean;
+  turnstileToken: string;
 }): Promise<Usuario> {
   const corpo = await requisicao<RespostaSessao>("/auth/cadastro", {
     method: "POST",
@@ -252,4 +254,23 @@ export async function listarMeusRoteiros(): Promise<{
 
 export async function deletarMeuRoteiro(id: string): Promise<void> {
   await requisicao<null>(`/roteiros/${id}`, { method: "DELETE" });
+}
+
+// ─── Recuperação de senha ────────────────────────────────────────────────────
+
+export async function recuperarSenha(
+  email: string,
+  turnstileToken: string
+): Promise<{ mensagem: string }> {
+  return requisicao<{ mensagem: string }>("/auth/recuperar-senha", {
+    method: "POST",
+    body: JSON.stringify({ email, turnstileToken }),
+  });
+}
+
+export async function resetarSenha(token: string, novaSenha: string): Promise<{ mensagem: string }> {
+  return requisicao<{ mensagem: string }>("/auth/resetar-senha", {
+    method: "POST",
+    body: JSON.stringify({ token, novaSenha }),
+  });
 }

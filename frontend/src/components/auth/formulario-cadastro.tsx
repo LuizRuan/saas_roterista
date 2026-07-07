@@ -8,12 +8,14 @@ import { cadastroSchema, errosPorCampo } from "@/lib/validacao";
 import { BotaoEnviar } from "./botao-enviar";
 import { Campo } from "./campo";
 import { MolduraAuth } from "./moldura-auth";
+import { Turnstile } from "./turnstile";
 
 export function FormularioCadastro() {
   const router = useRouter();
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -24,6 +26,7 @@ export function FormularioCadastro() {
       nome: String(form.get("nome") ?? ""),
       email: String(form.get("email") ?? ""),
       senha: String(form.get("senha") ?? ""),
+      aceitouTermos: form.get("aceitouTermos") === "on",
     };
 
     const validado = cadastroSchema.safeParse(dados);
@@ -33,9 +36,14 @@ export function FormularioCadastro() {
     }
     setErros({});
 
+    if (!turnstileToken) {
+      setErroGeral("Confirme a verificação de segurança antes de continuar.");
+      return;
+    }
+
     setEnviando(true);
     try {
-      await cadastrar(validado.data);
+      await cadastrar({ ...validado.data, turnstileToken });
       router.push("/dashboard");
     } catch (erro) {
       if (erro instanceof ErroApi && erro.status === 409) {
@@ -51,7 +59,6 @@ export function FormularioCadastro() {
 
   return (
     <MolduraAuth
-      arquivo="cadastro.txt"
       titulo={
         <>
           CRIE SUA CONTA <span className="marca-texto">GRÁTIS</span>
@@ -104,9 +111,48 @@ export function FormularioCadastro() {
           rotulo="Senha"
           autoComplete="new-password"
           placeholder="••••••••"
-          dica="Mínimo de 8 caracteres."
+          dica="Mín. 8 caracteres, com letra e número. Sem espaços."
           erro={erros.senha}
         />
+
+        <div>
+          <label className="flex items-start gap-2.5 text-sm text-tinta-suave">
+            <input
+              type="checkbox"
+              name="aceitouTermos"
+              className="mt-0.5 size-4 shrink-0 rounded border-tinta/30 accent-tinta"
+              aria-invalid={erros.aceitouTermos ? true : undefined}
+              aria-describedby={erros.aceitouTermos ? "aceitouTermos-erro" : undefined}
+            />
+            <span>
+              Li e aceito os{" "}
+              <Link
+                href="/termos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline decoration-marca decoration-4 underline-offset-4 hover:text-tinta"
+              >
+                Termos de Uso
+              </Link>{" "}
+              e a{" "}
+              <Link
+                href="/privacidade"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline decoration-marca decoration-4 underline-offset-4 hover:text-tinta"
+              >
+                Política de Privacidade
+              </Link>
+            </span>
+          </label>
+          {erros.aceitouTermos ? (
+            <p id="aceitouTermos-erro" className="mt-1.5 text-sm font-medium text-rec">
+              {erros.aceitouTermos}
+            </p>
+          ) : null}
+        </div>
+
+        <Turnstile onToken={setTurnstileToken} />
 
         <BotaoEnviar enviando={enviando} rotuloEnviando="Criando conta…">
           Criar conta grátis

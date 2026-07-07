@@ -1,11 +1,14 @@
 import { Router, type RequestHandler } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { z } from "zod";
 import { autenticar } from "../middleware/autenticar";
-import { validarBody } from "../middleware/validar";
-import { PadraoViralModel } from "../models/padraoViral";
+import { validarBody, validarObjectIdParam } from "../middleware/validar";
 import { RoteiroModel, roteiroPublico } from "../models/roteiro";
 import { UsuarioModel } from "../models/usuario";
 import { executarPipeline } from "../services/ia/pipeline";
+import { getPadroesAtivos } from "../services/cache-padroes";
+import { agendarLimpezaRoteiros } from "../services/cleanup";
+import { reservarUsoDiario, liberarUsoDiario } from "../services/uso-diario";
 import { env } from "../config/env";
 
 const LIMITE_DIARIO_FREE = 3;
@@ -16,6 +19,21 @@ function rotaAsync(handler: RequestHandler): RequestHandler {
     Promise.resolve(handler(req, res, next)).catch(next);
   };
 }
+
+/**
+ * Limite por usuário (com fallback por IP) na rota de geração — o contador
+ * diário em uso-diario.ts já trava o plano free, mas nada limitava rajadas
+ * de chamadas caras à IA (nem para contas admin, sem limite diário).
+ */
+const limiteGeracao = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (req) => req.usuarioId ?? ipKeyGenerator(req.ip ?? "anon"),
+  message: { erro: "Muitas gerações em pouco tempo. Aguarde alguns minutos." },
+});
 
 const gerarSchema = z.object({
   tema: z
@@ -36,14 +54,18 @@ export const roteirosRouter = Router();
 
 /**
  * POST /roteiros/gerar
- * Executa o pipeline multi-agente e salva o roteiro no banco.
+ * C1: plano vem do documento já buscado por reservarUsoDiario — sem query extra
+ * C4: padrões virais vêm do cache (5 min)
+ * M2: Cache-Control explícito
  */
 roteirosRouter.post(
   "/gerar",
   autenticar,
+  limiteGeracao,
   validarBody(gerarSchema),
   rotaAsync(async (req, res) => {
-    // Verifica se tem pelo menos uma chave de IA configurada
+    res.set("Cache-Control", "no-store"); // M2
+
     if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY) {
       res.status(503).json({
         erro: "Geração de roteiros indisponível. Chaves de IA não configuradas.",
@@ -54,40 +76,41 @@ roteirosRouter.post(
     const usuarioId = req.usuarioId!;
     const papel = req.usuarioPapel;
 
-    // Verificar limite diário (apenas para não-admins no plano free)
+    // Reserva atômica da vaga diária — fecha a race condition de
+    // requisições concorrentes (ver services/uso-diario.ts). Continua rodando
+    // pra plano "pro" (pra manter o contador de uso correto), mas só bloqueia
+    // quem não é admin nem pro.
+    let usadosHoje = 0;
+    let ilimitado = papel === "admin";
     if (papel !== "admin") {
-      const usuario = await UsuarioModel.findById(usuarioId);
-      if (usuario && usuario.plano === "free") {
-        const inicioHoje = new Date();
-        inicioHoje.setHours(0, 0, 0, 0);
+      const reserva = await reservarUsoDiario(usuarioId);
+      usadosHoje = reserva.quantidade;
+      ilimitado = reserva.plano === "pro";
 
-        const usadosHoje = await RoteiroModel.countDocuments({
-          usuarioId,
-          createdAt: { $gte: inicioHoje },
+      if (!ilimitado && usadosHoje > LIMITE_DIARIO_FREE) {
+        res.status(429).json({
+          erro: `Você atingiu o limite de ${LIMITE_DIARIO_FREE} roteiros por dia no plano gratuito.`,
+          limite: LIMITE_DIARIO_FREE,
+          usados: LIMITE_DIARIO_FREE,
         });
-
-        if (usadosHoje >= LIMITE_DIARIO_FREE) {
-          res.status(429).json({
-            erro: `Você atingiu o limite de ${LIMITE_DIARIO_FREE} roteiros por dia no plano gratuito.`,
-            limite: LIMITE_DIARIO_FREE,
-            usados: usadosHoje,
-          });
-          return;
-        }
+        return;
       }
     }
 
     const config = req.body;
 
-    // Busca padrões virais ativos do admin
-    const padroes = await PadraoViralModel.find({ ativo: true })
-      .sort({ createdAt: -1 })
-      .limit(30);
+    let resultado;
+    try {
+      // C4: padrões do cache — sem query ao banco quando cache válido
+      const padroes = await getPadroesAtivos();
+      resultado = await executarPipeline(config, padroes);
+    } catch (erro) {
+      // Geração falhou — libera a vaga reservada para não consumir o limite
+      // diário do usuário por uma falha da IA.
+      if (papel !== "admin") await liberarUsoDiario(usuarioId);
+      throw erro;
+    }
 
-    // Executa o pipeline completo
-    const resultado = await executarPipeline(config, padroes);
-
-    // Salva no banco
     const roteiroSalvo = await RoteiroModel.create({
       usuarioId,
       tema: config.tema,
@@ -106,14 +129,6 @@ roteirosRouter.post(
       tentativas: resultado.tentativas,
     });
 
-    // Calcula uso diário atualizado
-    const inicioHoje = new Date();
-    inicioHoje.setHours(0, 0, 0, 0);
-    const usadosHoje = await RoteiroModel.countDocuments({
-      usuarioId,
-      createdAt: { $gte: inicioHoje },
-    });
-
     res.json({
       roteiro: roteiroPublico(roteiroSalvo),
       avaliacao: {
@@ -123,8 +138,8 @@ roteirosRouter.post(
         tentativas: resultado.tentativas,
       },
       uso: {
-        usadosHoje,
-        limiteDiario: papel === "admin" ? null : LIMITE_DIARIO_FREE,
+        usadosHoje: papel === "admin" ? 0 : usadosHoje,
+        limiteDiario: ilimitado ? null : LIMITE_DIARIO_FREE,
       },
     });
   })
@@ -132,15 +147,23 @@ roteirosRouter.post(
 
 /**
  * GET /roteiros/meus
- * Lista os roteiros do usuário logado.
+ * I2: .select() — apenas campos da listagem, sem textos completos (200B vs 3.5KB/doc)
+ * M2: Cache-Control explícito
  */
 roteirosRouter.get(
   "/meus",
   autenticar,
   rotaAsync(async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); // M2
+
+    // P7: dispara limpeza em background (máx 1x/hora)
+    agendarLimpezaRoteiros();
+
+    // I2: projeção — sem gancho/problema/virada/prova/cta na listagem
     const roteiros = await RoteiroModel.find({ usuarioId: req.usuarioId })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .select("tema formato tom notaFinal aprovado tentativas notas criadoEm createdAt");
 
     // Uso diário
     const inicioHoje = new Date();
@@ -150,23 +173,52 @@ roteirosRouter.get(
       createdAt: { $gte: inicioHoje },
     });
 
+    // Query isolada e pequena — só pra saber se o plano é "pro" (sem limite).
+    const usuario = await UsuarioModel.findById(req.usuarioId).select("plano").lean();
+    const ilimitado = req.usuarioPapel === "admin" || usuario?.plano === "pro";
+
     res.json({
       roteiros: roteiros.map(roteiroPublico),
       uso: {
         usadosHoje,
-        limiteDiario: req.usuarioPapel === "admin" ? null : LIMITE_DIARIO_FREE,
+        limiteDiario: ilimitado ? null : LIMITE_DIARIO_FREE,
       },
     });
   })
 );
 
 /**
+ * GET /roteiros/:id
+ * Busca roteiro completo (com todos os textos) — chamado ao expandir um card.
+ */
+roteirosRouter.get(
+  "/:id",
+  autenticar,
+  validarObjectIdParam("id"),
+  rotaAsync(async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+
+    const roteiro = await RoteiroModel.findOne({
+      _id: req.params.id,
+      usuarioId: req.usuarioId,
+    });
+
+    if (!roteiro) {
+      res.status(404).json({ erro: "Roteiro não encontrado." });
+      return;
+    }
+
+    res.json({ roteiro: roteiroPublico(roteiro) });
+  })
+);
+
+/**
  * DELETE /roteiros/:id
- * Remove um roteiro do usuário.
  */
 roteirosRouter.delete(
   "/:id",
   autenticar,
+  validarObjectIdParam("id"),
   rotaAsync(async (req, res) => {
     const roteiro = await RoteiroModel.findOneAndDelete({
       _id: req.params.id,

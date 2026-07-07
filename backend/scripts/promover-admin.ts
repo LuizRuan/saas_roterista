@@ -26,21 +26,17 @@ async function main() {
 
   await mongoose.connect(MONGODB_URI);
 
-  const resultado = await mongoose.connection
-    .collection("usuarios")
-    .updateOne(
-      { email: ADMIN_EMAIL.toLowerCase().trim() },
-      { $set: { papel: "admin" } }
-    );
+  const { promoverAdmin } = await import("../src/services/administracao");
+  const promovido = await promoverAdmin(ADMIN_EMAIL);
 
-  if (resultado.matchedCount === 0) {
+  if (!promovido) {
     console.error(`❌ Nenhuma conta encontrada para: ${ADMIN_EMAIL}`);
     await mongoose.disconnect();
     process.exit(1);
   }
 
   console.log(`✅ Conta ${ADMIN_EMAIL} promovida a admin com sucesso!`);
-  console.log("   Faça logout e login novamente para o novo papel aparecer no token.");
+  console.log("   A sessão ativa dessa conta (se houver) foi revogada — é necessário fazer login novamente.");
 
   await mongoose.disconnect();
 }

@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import app from "../app";
 import { UsuarioModel } from "../models/usuario";
@@ -23,8 +24,9 @@ beforeEach(async () => {
 
 const contaValida = {
   nome: "Ruan Criador",
-  email: "ruan@example.com",
+  email: "ruan@gmail.com",
   senha: "senha-forte-123",
+  aceitouTermos: true,
 };
 
 /** Extrai o cookie de refresh do Set-Cookie da resposta. */
@@ -83,6 +85,36 @@ describe("POST /auth/cadastro", () => {
     expect(doc?.senhaHash).not.toContain(contaValida.senha);
     expect(doc?.senhaHash).toMatch(/^\$2/); // formato bcrypt
   });
+
+  it("exige aceite dos termos — sem o campo, rejeita com 400", async () => {
+    const { aceitouTermos: _semUso, ...semCampo } = contaValida as typeof contaValida & {
+      aceitouTermos?: boolean;
+    };
+    const res = await request(app).post("/auth/cadastro").send(semCampo);
+
+    expect(res.status).toBe(400);
+    expect(res.body.campos.aceitouTermos).toBeDefined();
+  });
+
+  it("exige aceite dos termos — com false, rejeita com 400", async () => {
+    const res = await request(app)
+      .post("/auth/cadastro")
+      .send({ ...contaValida, aceitouTermos: false });
+
+    expect(res.status).toBe(400);
+    expect(res.body.campos.aceitouTermos).toBeDefined();
+  });
+
+  it("com aceite marcado, cria a conta e registra a data do aceite", async () => {
+    const res = await request(app)
+      .post("/auth/cadastro")
+      .send({ ...contaValida, aceitouTermos: true });
+
+    expect(res.status).toBe(201);
+
+    const doc = await UsuarioModel.findOne({ email: contaValida.email }).lean();
+    expect(doc?.termosAceitosEm).toBeInstanceOf(Date);
+  });
 });
 
 describe("POST /auth/login", () => {
@@ -106,11 +138,22 @@ describe("POST /auth/login", () => {
       .send({ email: contaValida.email, senha: "senha-errada-999" });
     const emailInexistente = await request(app)
       .post("/auth/login")
-      .send({ email: "ninguem@example.com", senha: "qualquer-coisa-1" });
+      .send({ email: "ninguem@gmail.com", senha: "qualquer-coisa-1" });
 
     expect(senhaErrada.status).toBe(401);
     expect(emailInexistente.status).toBe(401);
     expect(senhaErrada.body.erro).toBe(emailInexistente.body.erro);
+  });
+
+  it("compara a senha (bcrypt) mesmo quando o e-mail não existe — evita vazamento por tempo de resposta", async () => {
+    const spy = vi.spyOn(bcrypt, "compare");
+
+    await request(app)
+      .post("/auth/login")
+      .send({ email: "ninguem@gmail.com", senha: "qualquer-coisa-1" });
+
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
 
@@ -216,5 +259,14 @@ describe("POST /auth/logout", () => {
       .set("Cookie", cookie)
       .set("x-cliente", "gancho-web");
     expect(refresh.status).toBe(401);
+  });
+
+  it("exige o cabeçalho x-cliente (anti-CSRF)", async () => {
+    const cadastro = await request(app).post("/auth/cadastro").send(contaValida);
+    const cookie = cookieRefresh(cadastro)!;
+
+    const res = await request(app).post("/auth/logout").set("Cookie", cookie);
+
+    expect(res.status).toBe(403);
   });
 });

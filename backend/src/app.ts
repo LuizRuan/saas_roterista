@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -7,6 +8,7 @@ import { env } from "./config/env";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { roteirosRouter } from "./routes/roteiros";
+import { logger } from "./lib/logger";
 
 const app = express();
 
@@ -16,6 +18,8 @@ if (env.NODE_ENV === "production") {
 }
 
 app.use(helmet());
+// I5: Compressão gzip/deflate — reduz payload JSON ~70%
+app.use(compression());
 app.use(
   cors({
     origin: env.CLIENT_URL, // apenas o domínio do frontend
@@ -26,6 +30,8 @@ app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 
 app.get("/health", (_req, res) => {
+  // M2: Cache-Control explícito — dados dinâmicos, sem cache
+  res.set("Cache-Control", "no-store");
   res.json({
     status: "ok",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
@@ -40,7 +46,7 @@ app.use("/roteiros", roteirosRouter);
 // Erros inesperados nunca vazam stack trace para o cliente.
 app.use(
   (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error("[api] erro não tratado:", err);
+    logger.error("api", "Erro não tratado", { erro: err.message, stack: err.stack });
     res.status(500).json({ erro: "Erro interno. Tente novamente." });
   }
 );

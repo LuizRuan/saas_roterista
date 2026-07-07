@@ -1,7 +1,8 @@
 import { Router, type CookieOptions, type RequestHandler } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import mongoose from "mongoose";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { env } from "../config/env";
 import { UsuarioModel, usuarioPublico, type UsuarioDoc } from "../models/usuario";
 import { cadastroSchema, loginSchema } from "../schemas/auth";
@@ -15,8 +16,17 @@ import {
   hashToken,
   verificarRefreshToken,
 } from "../services/tokens";
+import { enviarEmailRecuperacao } from "../services/email";
+import { verificarTurnstile } from "../services/turnstile";
+import { logger } from "../lib/logger";
+import { z } from "zod";
 
 const CUSTO_BCRYPT = 12;
+
+// Hash "de mentira" usado para igualar o tempo de resposta quando o e-mail
+// não existe — sem isso, a ausência do bcrypt.compare (que leva ~100ms)
+// vaza por timing quais e-mails têm conta, mesmo com a mesma mensagem de erro.
+const HASH_FALSO = bcrypt.hashSync("nenhuma-conta-com-este-email", CUSTO_BCRYPT);
 
 // Em produção frontend (Vercel) e API (Render) ficam em sites diferentes,
 // então o cookie precisa de SameSite=None + Secure. Em dev (localhost) usamos
@@ -60,13 +70,43 @@ const exigirCabecalhoCliente: RequestHandler = (req, res, next) => {
   next();
 };
 
+/**
+ * Exige um CAPTCHA (Cloudflare Turnstile) válido — usado nas rotas mais
+ * visadas por bots (cadastro e recuperação de senha). Sem TURNSTILE_SECRET_KEY
+ * configurada (dev), verificarTurnstile pula a checagem.
+ */
+const exigirTurnstile: RequestHandler = (req, res, next) => {
+  verificarTurnstile(req.body?.turnstileToken, req.ip).then((ok) => {
+    if (!ok) {
+      res.status(400).json({ erro: "Verificação de segurança falhou. Recarregue a página e tente de novo." });
+      return;
+    }
+    next();
+  });
+};
+
+// I4: limite global por IP — 20 requests em 15 min
 const limiteAuth = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: () => env.NODE_ENV === "test",
   message: { erro: "Muitas tentativas. Aguarde alguns minutos e tente de novo." },
+});
+
+// I4: limite por e-mail — 5 tentativas em 30 min (combate brute force em contas específicas)
+const limitePorEmail = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (req) => {
+    const email = String(req.body?.email ?? "").toLowerCase().trim();
+    return email || ipKeyGenerator(req.ip ?? "anon");
+  },
+  message: { erro: "Conta bloqueada temporariamente por muitas tentativas. Tente em 30 minutos." },
 });
 
 export const authRouter = Router();
@@ -88,6 +128,7 @@ async function abrirSessao(res: Parameters<RequestHandler>[1], usuario: UsuarioD
 
 authRouter.post(
   "/cadastro",
+  exigirTurnstile,
   validarBody(cadastroSchema),
   rotaAsync(async (req, res) => {
     const { nome, email, senha } = req.body;
@@ -99,7 +140,12 @@ authRouter.post(
     }
 
     const senhaHash = await bcrypt.hash(senha, CUSTO_BCRYPT);
-    const usuario = await UsuarioModel.create({ nome, email, senhaHash });
+    const usuario = await UsuarioModel.create({
+      nome,
+      email,
+      senhaHash,
+      termosAceitosEm: new Date(),
+    });
 
     const accessToken = await abrirSessao(res, usuario);
     res.status(201).json({ usuario: usuarioPublico(usuario), accessToken });
@@ -108,14 +154,16 @@ authRouter.post(
 
 authRouter.post(
   "/login",
+  limitePorEmail, // I4: limite por e-mail específico
   validarBody(loginSchema),
   rotaAsync(async (req, res) => {
     const { email, senha } = req.body;
 
     const usuario = await UsuarioModel.findOne({ email });
-    // Mesma resposta para e-mail inexistente e senha errada,
-    // para não revelar quais e-mails têm conta.
-    const senhaOk = usuario && (await bcrypt.compare(senha, usuario.senhaHash));
+    // Mesma resposta — e mesmo tempo de resposta — para e-mail inexistente e
+    // senha errada: sempre roda o bcrypt.compare, mesmo sem usuário, contra
+    // um hash fixo, para não revelar quais e-mails têm conta por timing.
+    const senhaOk = await bcrypt.compare(senha, usuario?.senhaHash ?? HASH_FALSO);
     if (!usuario || !senhaOk) {
       res.status(401).json({ erro: "E-mail ou senha incorretos." });
       return;
@@ -185,5 +233,87 @@ authRouter.get(
       return;
     }
     res.json({ usuario: usuarioPublico(usuario) });
+  })
+);
+
+// ─── Recuperação de senha ────────────────────────────────────────────────────
+
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
+
+const recuperarSchema = z.object({
+  email: z.string().email("E-mail inválido.").transform((e) => e.toLowerCase().trim()),
+});
+
+const resetarSchema = z.object({
+  token: z.string().min(1, "Token obrigatório."),
+  novaSenha: z.string().min(8, "A nova senha precisa de pelo menos 8 caracteres."),
+});
+
+/**
+ * POST /auth/recuperar-senha
+ * Gera token + envia e-mail. Sempre retorna 200 (não revela se o e-mail existe).
+ */
+authRouter.post(
+  "/recuperar-senha",
+  exigirTurnstile,
+  validarBody(recuperarSchema),
+  rotaAsync(async (req, res) => {
+    const { email } = req.body;
+
+    const usuario = await UsuarioModel.findOne({ email });
+
+    if (usuario) {
+      // Gera token aleatório de 32 bytes
+      const token = crypto.randomBytes(32).toString("hex");
+      usuario.resetSenhaHash = crypto.createHash("sha256").update(token).digest("hex");
+      usuario.resetSenhaExpira = new Date(Date.now() + RESET_TTL_MS);
+      await usuario.save();
+
+      // Envia e-mail (fire-and-forget — não bloqueia a response)
+      enviarEmailRecuperacao(email, usuario.nome, token).catch((err) =>
+        logger.error("auth", "Erro ao enviar e-mail de recuperação", { erro: (err as Error).message })
+      );
+    }
+
+    // Resposta genérica — nunca revela se o e-mail existe
+    res.json({
+      mensagem: "Se esse e-mail estiver cadastrado, você receberá um link de recuperação.",
+    });
+  })
+);
+
+/**
+ * POST /auth/resetar-senha
+ * Valida o token e altera a senha.
+ */
+authRouter.post(
+  "/resetar-senha",
+  validarBody(resetarSchema),
+  rotaAsync(async (req, res) => {
+    const { token, novaSenha } = req.body;
+
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const usuario = await UsuarioModel.findOne({
+      resetSenhaHash: hash,
+      resetSenhaExpira: { $gt: new Date() },
+    });
+
+    if (!usuario) {
+      res.status(400).json({
+        erro: "Link expirado ou inválido. Solicite uma nova recuperação.",
+      });
+      return;
+    }
+
+    // Atualiza a senha e limpa os campos de reset
+    usuario.senhaHash = await bcrypt.hash(novaSenha, CUSTO_BCRYPT);
+    usuario.resetSenhaHash = null;
+    usuario.resetSenhaExpira = null;
+    // Revoga sessão ativa para forçar login com nova senha
+    usuario.refreshTokenHash = null;
+    await usuario.save();
+
+    res.json({ mensagem: "Senha alterada com sucesso! Faça login com a nova senha." });
   })
 );

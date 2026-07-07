@@ -28,7 +28,7 @@ export function gerarRefreshToken(usuarioId: string): string {
 
 export function verificarAccessToken(token: string): PayloadToken | null {
   try {
-    return jwt.verify(token, env.JWT_ACCESS_SECRET) as PayloadToken;
+    return jwt.verify(token, env.JWT_ACCESS_SECRET, { algorithms: ["HS256"] }) as PayloadToken;
   } catch {
     return null;
   }
@@ -36,7 +36,7 @@ export function verificarAccessToken(token: string): PayloadToken | null {
 
 export function verificarRefreshToken(token: string): PayloadToken | null {
   try {
-    return jwt.verify(token, env.JWT_REFRESH_SECRET) as PayloadToken;
+    return jwt.verify(token, env.JWT_REFRESH_SECRET, { algorithms: ["HS256"] }) as PayloadToken;
   } catch {
     return null;
   }

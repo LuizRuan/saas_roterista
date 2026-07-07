@@ -46,7 +46,6 @@ export function FormularioLogin() {
 
   return (
     <MolduraAuth
-      arquivo="login.txt"
       titulo={
         <>
           DE VOLTA À <span className="marca-texto">GRAVAÇÃO</span>
@@ -97,6 +96,15 @@ export function FormularioLogin() {
         <BotaoEnviar enviando={enviando} rotuloEnviando="Entrando…">
           Entrar
         </BotaoEnviar>
+
+        <div className="mt-4 text-center">
+          <Link
+            href="/recuperar-senha"
+            className="font-mono text-xs uppercase tracking-widest text-cinza underline decoration-tinta/20 underline-offset-4 transition-colors hover:text-tinta"
+          >
+            Esqueci minha senha
+          </Link>
+        </div>
       </form>
     </MolduraAuth>
   );

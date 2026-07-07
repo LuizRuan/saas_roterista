@@ -1,9 +1,10 @@
 import { Router, type RequestHandler } from "express";
 import { autenticar } from "../middleware/autenticar";
 import { exigirAdmin } from "../middleware/exigirAdmin";
-import { validarBody } from "../middleware/validar";
+import { validarBody, validarObjectIdParam } from "../middleware/validar";
 import { PadraoViralModel, padraoPublico } from "../models/padraoViral";
 import { padraoViralSchema } from "../schemas/admin";
+import { invalidarCachePadroes } from "../services/cache-padroes";
 
 /** Envolve handler async para o Express 4 capturar erros rejeitados. */
 function rotaAsync(handler: RequestHandler): RequestHandler {
@@ -34,6 +35,7 @@ adminRouter.post(
   validarBody(padraoViralSchema),
   rotaAsync(async (req, res) => {
     const padrao = await PadraoViralModel.create(req.body);
+    invalidarCachePadroes(); // C4: invalida cache
     res.status(201).json({ padrao: padraoPublico(padrao) });
   })
 );
@@ -41,6 +43,7 @@ adminRouter.post(
 /** GET /admin/padroes/:id — busca um padrão */
 adminRouter.get(
   "/padroes/:id",
+  validarObjectIdParam("id"),
   rotaAsync(async (req, res) => {
     const padrao = await PadraoViralModel.findById(req.params.id);
     if (!padrao) {
@@ -54,6 +57,7 @@ adminRouter.get(
 /** PATCH /admin/padroes/:id — atualiza campos do padrão */
 adminRouter.patch(
   "/padroes/:id",
+  validarObjectIdParam("id"),
   validarBody(padraoViralSchema.partial()),
   rotaAsync(async (req, res) => {
     const padrao = await PadraoViralModel.findByIdAndUpdate(
@@ -65,6 +69,7 @@ adminRouter.patch(
       res.status(404).json({ erro: "Padrão não encontrado." });
       return;
     }
+    invalidarCachePadroes(); // C4: invalida cache
     res.json({ padrao: padraoPublico(padrao) });
   })
 );
@@ -72,12 +77,14 @@ adminRouter.patch(
 /** DELETE /admin/padroes/:id — remove permanentemente */
 adminRouter.delete(
   "/padroes/:id",
+  validarObjectIdParam("id"),
   rotaAsync(async (req, res) => {
     const padrao = await PadraoViralModel.findByIdAndDelete(req.params.id);
     if (!padrao) {
       res.status(404).json({ erro: "Padrão não encontrado." });
       return;
     }
+    invalidarCachePadroes(); // C4: invalida cache
     res.status(204).end();
   })
 );

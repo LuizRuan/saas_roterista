@@ -17,6 +17,11 @@ const envSchema = z.object({
   // Chaves de IA — opcionais em dev; sem elas a geração retorna erro 503.
   GROQ_API_KEY: z.string().default(""),
   GEMINI_API_KEY: z.string().default(""),
+  // E-mail (recuperação de senha) — resend.com (100 emails/dia grátis)
+  RESEND_API_KEY: z.string().default(""),
+  // CAPTCHA anti-bot (cadastro e recuperação de senha) — Cloudflare Turnstile.
+  // Opcional em dev; sem ela a verificação é pulada (log de aviso).
+  TURNSTILE_SECRET_KEY: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
