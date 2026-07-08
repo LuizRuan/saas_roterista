@@ -106,6 +106,7 @@ export async function criarRoteiro(
   const respostaTexto = await gerarComIA({
     sistema: SISTEMA,
     usuario: promptUsuario,
+    preferir: "groq", // criador: rápido; crítico usa Gemini pra avaliar
   });
 
   // Parse do JSON

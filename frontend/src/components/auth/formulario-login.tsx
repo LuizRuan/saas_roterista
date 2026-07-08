@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ErroApi, entrar } from "@/lib/api";
 import { errosPorCampo, loginSchema, validarCampo } from "@/lib/validacao";
+import { useEsperaLonga } from "@/hooks/use-espera-longa";
 import { BotaoEnviar } from "./botao-enviar";
 import { Campo } from "./campo";
 import { MolduraAuth } from "./moldura-auth";
@@ -14,6 +15,7 @@ export function FormularioLogin() {
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const acordando = useEsperaLonga(enviando);
 
   function revalidarCampo(campo: string, valor: unknown) {
     setErros((atual) => {
@@ -111,6 +113,12 @@ export function FormularioLogin() {
         <BotaoEnviar enviando={enviando} rotuloEnviando="Entrando…">
           Entrar
         </BotaoEnviar>
+
+        {acordando && (
+          <p className="text-center font-mono text-xs text-cinza">
+            Acordando o estúdio… a primeira visita do dia pode levar alguns segundos.
+          </p>
+        )}
 
         <div className="mt-4 text-center">
           <Link

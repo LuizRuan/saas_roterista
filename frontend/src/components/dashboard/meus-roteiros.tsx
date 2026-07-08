@@ -16,7 +16,9 @@ import {
 } from "@/lib/api";
 import { CabecalhoApp } from "@/components/app/cabecalho-app";
 import { RodapeApp } from "@/components/app/rodape-app";
+import { AcordandoEstudio } from "@/components/app/acordando-estudio";
 import { useConfirmacao } from "@/hooks/use-confirmacao";
+import { useEsperaLonga } from "@/hooks/use-espera-longa";
 
 // ---------------------------------------------------------------------------
 // Labels
@@ -263,6 +265,7 @@ export function MeusRoteiros() {
   const [deletando, setDeletando] = useState<string | null>(null);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
   const [erroGeral, setErroGeral] = useState<string | null>(null);
+  const acordando = useEsperaLonga(carregando);
   const { confirmar, elemento: modalConfirmacao } = useConfirmacao();
 
   useEffect(() => {
@@ -311,10 +314,14 @@ export function MeusRoteiros() {
   if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
-          <span aria-hidden className="rec-pulso inline-block size-2 rounded-full bg-rec" />
-          Carregando roteiros…
-        </p>
+        {acordando ? (
+          <AcordandoEstudio />
+        ) : (
+          <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
+            <span aria-hidden className="rec-pulso inline-block size-2 rounded-full bg-rec" />
+            Carregando roteiros…
+          </p>
+        )}
       </main>
     );
   }

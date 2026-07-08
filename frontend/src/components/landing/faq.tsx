@@ -15,7 +15,7 @@ const perguntas = [
   {
     pergunta: "Funciona para qual plataforma?",
     resposta:
-      "Shorts, Reels e TikTok primeiro — vídeo curto é onde estrutura de retenção mais pesa. No plano Pro, também formatos longos para YouTube.",
+      "Reels, Shorts e TikTok — vídeo curto é onde estrutura de retenção mais pesa. Você escolhe o formato e a duração na hora de gerar o roteiro.",
   },
   {
     pergunta: "Preciso de cartão para testar?",

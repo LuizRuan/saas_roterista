@@ -45,7 +45,7 @@ export function CabecalhoApp({
 
   return (
     <header className="sticky top-0 z-50 border-b border-tinta/10 bg-papel/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
         {badgeAdmin === "logo-sempre" ? (
           <div className="flex items-center gap-4">
             {logo}
@@ -57,7 +57,7 @@ export function CabecalhoApp({
           logo
         )}
 
-        <nav className="hidden items-center gap-6 sm:flex">
+        <nav className="order-last flex w-full items-center gap-4 overflow-x-auto pb-0.5 sm:order-none sm:w-auto sm:gap-6 sm:overflow-visible sm:pb-0">
           {itensNav.map((item) =>
             "href" in item ? (
               <Link

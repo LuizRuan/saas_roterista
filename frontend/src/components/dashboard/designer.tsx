@@ -8,6 +8,8 @@ import { primeiraMensagemDeCampos } from "@/lib/validacao";
 import { CabecalhoApp } from "@/components/app/cabecalho-app";
 import { CampoSublinhado } from "@/components/app/campo-sublinhado";
 import { RodapeApp } from "@/components/app/rodape-app";
+import { AcordandoEstudio } from "@/components/app/acordando-estudio";
+import { useEsperaLonga } from "@/hooks/use-espera-longa";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -18,8 +20,7 @@ type FormatoVideo =
   | "reels-30s"
   | "shorts-60s"
   | "tiktok-15s"
-  | "tiktok-60s"
-  | "youtube-3min";
+  | "tiktok-60s";
 
 type TomNarrativo =
   | "urgente"
@@ -54,7 +55,6 @@ const FORMATOS: { valor: FormatoVideo; label: string; duracao: string }[] = [
   { valor: "shorts-60s", label: "Shorts", duracao: "60s" },
   { valor: "tiktok-15s", label: "TikTok", duracao: "15s" },
   { valor: "tiktok-60s", label: "TikTok", duracao: "60s" },
-  { valor: "youtube-3min", label: "YouTube", duracao: "3min" },
 ];
 
 const TONS: { valor: TomNarrativo; label: string; descricao: string }[] = [
@@ -126,6 +126,7 @@ export function Designer() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [saindo, setSaindo] = useState(false);
+  const acordando = useEsperaLonga(carregando);
 
   // Formulário
   const [config, setConfig] = useState<ConfigRoteiro>({
@@ -261,10 +262,14 @@ export function Designer() {
   if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-papel">
-        <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
-          <span aria-hidden className="rec-pulso inline-block size-2 rounded-full bg-rec" />
-          Abrindo estúdio…
-        </p>
+        {acordando ? (
+          <AcordandoEstudio />
+        ) : (
+          <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
+            <span aria-hidden className="rec-pulso inline-block size-2 rounded-full bg-rec" />
+            Abrindo estúdio…
+          </p>
+        )}
       </main>
     );
   }

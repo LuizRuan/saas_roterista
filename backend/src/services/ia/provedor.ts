@@ -28,6 +28,12 @@ function getGemini(): GoogleGenerativeAI | null {
 export interface MensagemIA {
   sistema: string;
   usuario: string;
+  /**
+   * Qual provedor tentar primeiro. O outro continua como fallback.
+   * Permite usar modelos diferentes para criador e crítico (segunda opinião
+   * real, em vez do crítico avaliar com o mesmo modelo que gerou).
+   */
+  preferir?: "groq" | "gemini";
 }
 
 /** Promessa que rejeita após TIMEOUT_MS com mensagem clara. */
@@ -43,61 +49,72 @@ function comTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
-/** Tenta gerar com Groq; se falhar, tenta Gemini. Joga erro se os dois falharem. */
-export async function gerarComIA(mensagem: MensagemIA): Promise<string> {
+/** Gera com Groq (Llama 3.3 70B — rápido). Retorna null se indisponível/falhar. */
+async function tentarGroq(mensagem: MensagemIA): Promise<string | null> {
   const groq = getGroq();
-  const gemini = getGemini();
+  if (!groq) return null;
+  try {
+    const resposta = await comTimeout(
+      groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: mensagem.sistema },
+          { role: "user", content: mensagem.usuario },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: { type: "json_object" },
+      }),
+      "Groq"
+    );
+    return resposta.choices[0]?.message?.content ?? null;
+  } catch (erroGroq) {
+    logger.warn("ia", "Groq falhou", { erro: (erroGroq as Error).message });
+    return null;
+  }
+}
 
-  if (!groq && !gemini) {
+/** Gera com Gemini (fallback / segunda opinião). Retorna null se indisponível/falhar. */
+async function tentarGemini(mensagem: MensagemIA): Promise<string | null> {
+  const gemini = getGemini();
+  if (!gemini) return null;
+  try {
+    const modelo = gemini.getGenerativeModel({
+      model: "gemini-2.5-flash-preview-05-20",
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2000,
+        responseMimeType: "application/json",
+      },
+    });
+    const resposta = await comTimeout(
+      modelo.generateContent(`${mensagem.sistema}\n\n---\n\n${mensagem.usuario}`),
+      "Gemini"
+    );
+    return resposta.response.text() || null;
+  } catch (erroGemini) {
+    logger.warn("ia", "Gemini falhou", { erro: (erroGemini as Error).message });
+    return null;
+  }
+}
+
+/**
+ * Tenta gerar com o provedor preferido primeiro; se falhar, tenta o outro.
+ * `preferir` permite criador e crítico rodarem em modelos diferentes.
+ */
+export async function gerarComIA(mensagem: MensagemIA): Promise<string> {
+  if (!getGroq() && !getGemini()) {
     throw new Error("Nenhuma chave de IA configurada (GROQ_API_KEY ou GEMINI_API_KEY).");
   }
 
-  // Tentativa 1: Groq (Llama 3.3 70B — rápido)
-  if (groq) {
-    try {
-      const resposta = await comTimeout(
-        groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: mensagem.sistema },
-            { role: "user", content: mensagem.usuario },
-          ],
-          temperature: 0.7,
-          max_tokens: 2000,
-          response_format: { type: "json_object" },
-        }),
-        "Groq"
-      );
+  const ordem =
+    mensagem.preferir === "gemini"
+      ? [tentarGemini, tentarGroq]
+      : [tentarGroq, tentarGemini];
 
-      const texto = resposta.choices[0]?.message?.content;
-      if (texto) return texto;
-    } catch (erroGroq) {
-      logger.warn("ia", "Groq falhou, tentando Gemini", { erro: (erroGroq as Error).message });
-    }
-  }
-
-  // Tentativa 2: Gemini (fallback)
-  if (gemini) {
-    try {
-      const modelo = gemini.getGenerativeModel({
-        model: "gemini-2.5-flash-preview-05-20",
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2000,
-          responseMimeType: "application/json",
-        },
-      });
-
-      const resposta = await comTimeout(
-        modelo.generateContent(`${mensagem.sistema}\n\n---\n\n${mensagem.usuario}`),
-        "Gemini"
-      );
-
-      const texto = resposta.response.text();
-      if (texto) return texto;
-    } catch (erroGemini) {
-      logger.error("ia", "Gemini também falhou", { erro: (erroGemini as Error).message });
-    }
+  for (const tentar of ordem) {
+    const texto = await tentar(mensagem);
+    if (texto) return texto;
   }
 
   throw new Error("Todas as tentativas de geração falharam.");

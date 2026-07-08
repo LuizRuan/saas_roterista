@@ -55,29 +55,42 @@ export class ErroApi extends Error {
 
 type CorpoJson = Record<string, unknown>;
 
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function requisicao<T>(
   caminho: string,
   init: RequestInit = {},
   tentandoNovamente = false
 ): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${caminho}`, {
-      ...init,
-      credentials: "include", // envia/recebe o cookie httpOnly de refresh
-      headers: {
-        "Content-Type": "application/json",
-        "x-cliente": "gancho-web", // exigido pela API nas rotas de sessão (anti-CSRF)
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...init.headers,
-      },
-    });
-  } catch {
-    throw new ErroApi(
-      0,
-      "Não foi possível falar com o servidor. Confira sua conexão e tente de novo."
-    );
+  // Erro de rede tem retry próprio: o backend no Render free "dorme" e a
+  // primeira conexão pode cair enquanto ele sobe. Tentamos algumas vezes com
+  // backoff antes de desistir (as telas mostram "acordando o estúdio" nesse meio-tempo).
+  let res: Response | null = null;
+  const MAX_REDE = 3;
+  for (let tentativaRede = 1; tentativaRede <= MAX_REDE; tentativaRede++) {
+    try {
+      res = await fetch(`${API_URL}${caminho}`, {
+        ...init,
+        credentials: "include", // envia/recebe o cookie httpOnly de refresh
+        headers: {
+          "Content-Type": "application/json",
+          "x-cliente": "gancho-web", // exigido pela API nas rotas de sessão (anti-CSRF)
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          ...init.headers,
+        },
+      });
+      break;
+    } catch {
+      if (tentativaRede === MAX_REDE) {
+        throw new ErroApi(
+          0,
+          "Não foi possível falar com o servidor. Confira sua conexão e tente de novo."
+        );
+      }
+      await espera(tentativaRede * 1500);
+    }
   }
+  res = res!;
 
   if (res.status === 204) return null as T;
 

@@ -6,6 +6,8 @@ import { useEffect, useState, useRef } from "react";
 import { sair, usuarioAtual, listarMeusRoteiros, type Usuario, type UsoRoteiros, type RoteiroResumo } from "@/lib/api";
 import { CabecalhoApp } from "@/components/app/cabecalho-app";
 import { RodapeApp } from "@/components/app/rodape-app";
+import { AcordandoEstudio } from "@/components/app/acordando-estudio";
+import { useEsperaLonga } from "@/hooks/use-espera-longa";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -291,6 +293,7 @@ export function Painel() {
   const [saindo, setSaindo] = useState(false);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
   const painelRef = useRef<HTMLDivElement>(null);
+  const acordando = useEsperaLonga(carregando);
 
   // I1: Auth guard + dados de uso em paralelo (um único round-trip de espera)
   useEffect(() => {
@@ -333,13 +336,17 @@ export function Painel() {
   if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
-          <span
-            aria-hidden
-            className="rec-pulso inline-block size-2 rounded-full bg-rec"
-          />
-          Abrindo estúdio…
-        </p>
+        {acordando ? (
+          <AcordandoEstudio />
+        ) : (
+          <p className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-tinta-suave">
+            <span
+              aria-hidden
+              className="rec-pulso inline-block size-2 rounded-full bg-rec"
+            />
+            Abrindo estúdio…
+          </p>
+        )}
       </main>
     );
   }

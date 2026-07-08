@@ -78,6 +78,9 @@ export async function avaliarRoteiro(
   const respostaTexto = await gerarComIA({
     sistema: SISTEMA,
     usuario: promptUsuario,
+    // Crítico avalia com um modelo diferente do criador (que usa Groq) —
+    // evita o modelo "aprovar o próprio trabalho" e dá uma segunda opinião real.
+    preferir: "gemini",
   });
 
   try {

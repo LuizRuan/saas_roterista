@@ -27,32 +27,30 @@ export async function executarPipeline(
   padroes: PadraoViralDoc[]
 ): Promise<ResultadoPipeline> {
   let feedbackMelhoria: string | undefined;
-  let ultimoRoteiro: RoteiroGerado | null = null;
-  let ultimaAvaliacao: AvaliacaoRoteiro | null = null;
+  // Guarda a MELHOR tentativa (maior nota), não a última — reescrever nem
+  // sempre melhora, então se esgotar as tentativas devolvemos a melhor.
+  let melhor: { roteiro: RoteiroGerado; avaliacao: AvaliacaoRoteiro; tentativa: number } | null = null;
 
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     log(`Tentativa ${tentativa}/${MAX_TENTATIVAS} — criando roteiro...`);
 
     // Agente Criador gera (ou reescreve)
     const roteiro = await criarRoteiro(config, padroes, feedbackMelhoria);
-    ultimoRoteiro = roteiro;
 
     log(`Tentativa ${tentativa}/${MAX_TENTATIVAS} — avaliando...`);
 
     // Agente Crítico avalia
     const avaliacao = await avaliarRoteiro(roteiro, config);
-    ultimaAvaliacao = avaliacao;
 
     log(`Tentativa ${tentativa} — nota: ${avaliacao.notaFinal} (${avaliacao.aprovado ? "APROVADO" : "REPROVADO"})`);
 
-    // Aprovado → retorna
-    if (avaliacao.aprovado) {
-      return { roteiro, avaliacao, tentativas: tentativa };
+    if (!melhor || avaliacao.notaFinal > melhor.avaliacao.notaFinal) {
+      melhor = { roteiro, avaliacao, tentativa };
     }
 
-    // Última tentativa → retorna mesmo sem aprovar
-    if (tentativa === MAX_TENTATIVAS) {
-      return { roteiro, avaliacao, tentativas: tentativa };
+    // Aprovado → retorna já
+    if (avaliacao.aprovado) {
+      return finalizar(config, roteiro, avaliacao, tentativa);
     }
 
     // Monta o feedback para o Criador reescrever
@@ -61,10 +59,24 @@ export async function executarPipeline(
       : `A nota foi ${avaliacao.notaFinal}/10. Melhore o gancho, a clareza e o CTA.`;
   }
 
-  // Fallback (nunca deve chegar aqui)
-  return {
-    roteiro: ultimoRoteiro!,
-    avaliacao: ultimaAvaliacao!,
-    tentativas: MAX_TENTATIVAS,
-  };
+  // Esgotou as tentativas sem aprovar → devolve a melhor.
+  return finalizar(config, melhor!.roteiro, melhor!.avaliacao, melhor!.tentativa);
+}
+
+/** Loga a qualidade da geração (metadata estruturada pra agregação) e retorna. */
+function finalizar(
+  config: ConfigCriacao,
+  roteiro: RoteiroGerado,
+  avaliacao: AvaliacaoRoteiro,
+  tentativas: number
+): ResultadoPipeline {
+  logger.info("pipeline", "roteiro finalizado", {
+    tema: config.tema,
+    formato: config.formato,
+    tom: config.tom,
+    notaFinal: avaliacao.notaFinal,
+    tentativas,
+    aprovado: avaliacao.aprovado,
+  });
+  return { roteiro, avaliacao, tentativas };
 }
