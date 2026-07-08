@@ -75,3 +75,29 @@ export function errosPorCampo(erro: z.ZodError): Record<string, string> {
   }
   return erros;
 }
+
+/**
+ * Revalida um único campo do schema — usado para limpar o erro assim que o
+ * usuário corrige o campo, sem esperar o próximo submit.
+ */
+export function validarCampo(
+  schema: z.ZodObject,
+  campo: string,
+  valor: unknown
+): string | undefined {
+  const campoSchema = schema.shape[campo];
+  if (!campoSchema) return undefined;
+  const resultado = campoSchema.safeParse(valor);
+  return resultado.success ? undefined : resultado.error.issues[0]?.message;
+}
+
+/** Extrai a primeira mensagem de campo de uma resposta de erro da API (ErroApi.campos). */
+export function primeiraMensagemDeCampos(
+  campos: Record<string, string[]> | undefined
+): string | undefined {
+  if (!campos) return undefined;
+  for (const mensagens of Object.values(campos)) {
+    if (mensagens?.[0]) return mensagens[0];
+  }
+  return undefined;
+}

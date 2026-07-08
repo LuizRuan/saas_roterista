@@ -374,8 +374,8 @@ export function Painel() {
           />
           <CardMetrica
             label="Este mês"
-            valor={uso ? `${uso.usadosNoMes}/${uso.limiteMensal ?? "∞"}` : "0"}
-            detalhe={uso?.limiteMensal ? "roteiros do limite" : "Admin · Ilimitado"}
+            valor={uso ? `${uso.usadosNoMes}/${uso.limiteMensal}` : "0"}
+            detalhe="roteiros do limite"
           />
           <CardMetrica
             label="Dias no estúdio"
@@ -385,7 +385,7 @@ export function Painel() {
           <CardMetrica
             label="Plano ativo"
             valor={eFree ? "FREE" : "PRO"}
-            detalhe={eFree ? "5 roteiros/mês" : "Ilimitado"}
+            detalhe={eFree ? "5 roteiros/mês" : "50 roteiros/mês"}
           />
         </div>
 
@@ -420,7 +420,7 @@ export function Painel() {
             <BarraProgresso
               label="Roteiros este mês"
               atual={uso?.usadosNoMes ?? 0}
-              maximo={uso?.limiteMensal ?? (eFree ? 5 : 999)}
+              maximo={uso?.limiteMensal ?? (eFree ? 5 : 50)}
             />
             <BarraProgresso label="Histórico total" atual={totalRoteiros} maximo={30} />
           </div>

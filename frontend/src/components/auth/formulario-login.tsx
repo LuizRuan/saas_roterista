@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ErroApi, entrar } from "@/lib/api";
-import { errosPorCampo, loginSchema } from "@/lib/validacao";
+import { errosPorCampo, loginSchema, validarCampo } from "@/lib/validacao";
 import { BotaoEnviar } from "./botao-enviar";
 import { Campo } from "./campo";
 import { MolduraAuth } from "./moldura-auth";
@@ -14,6 +14,19 @@ export function FormularioLogin() {
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+
+  function revalidarCampo(campo: string, valor: unknown) {
+    setErros((atual) => {
+      if (!atual[campo]) return atual;
+      const mensagem = validarCampo(loginSchema, campo, valor);
+      if (!mensagem) {
+        const resto = { ...atual };
+        delete resto[campo];
+        return resto;
+      }
+      return { ...atual, [campo]: mensagem };
+    });
+  }
 
   async function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -82,6 +95,7 @@ export function FormularioLogin() {
           autoComplete="email"
           placeholder="voce@exemplo.com"
           erro={erros.email}
+          onChange={(e) => revalidarCampo("email", e.target.value)}
         />
         <Campo
           id="senha"
@@ -91,6 +105,7 @@ export function FormularioLogin() {
           autoComplete="current-password"
           placeholder="••••••••"
           erro={erros.senha}
+          onChange={(e) => revalidarCampo("senha", e.target.value)}
         />
 
         <BotaoEnviar enviando={enviando} rotuloEnviando="Entrando…">

@@ -55,7 +55,11 @@ export class ErroApi extends Error {
 
 type CorpoJson = Record<string, unknown>;
 
-async function requisicao<T>(caminho: string, init: RequestInit = {}): Promise<T> {
+async function requisicao<T>(
+  caminho: string,
+  init: RequestInit = {},
+  tentandoNovamente = false
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${caminho}`, {
@@ -79,7 +83,18 @@ async function requisicao<T>(caminho: string, init: RequestInit = {}): Promise<T
 
   const corpo = (await res.json().catch(() => null)) as CorpoJson | null;
   if (!res.ok) {
-    if (res.status === 401) limparCacheUsuario();
+    if (res.status === 401) {
+      limparCacheUsuario();
+      // O access token vive só em memória: um reload de página o perde, e uma
+      // chamada autenticada pode sair antes da renovação (via cookie) terminar.
+      // Renova e refaz a chamada uma vez antes de desistir — evita deslogar o
+      // usuário por causa dessa corrida. Rotas de /auth/* ficam de fora (login
+      // errado ou refresh inválido não devem re-tentar; evita recursão).
+      if (!tentandoNovamente && !caminho.startsWith("/auth/")) {
+        const usuario = await renovarSessao();
+        if (usuario) return requisicao<T>(caminho, init, true);
+      }
+    }
     throw new ErroApi(
       res.status,
       typeof corpo?.erro === "string" ? corpo.erro : "Erro inesperado. Tente novamente.",
@@ -128,18 +143,36 @@ export async function sair(): Promise<void> {
   }
 }
 
+/**
+ * Renovação em andamento, compartilhada entre chamadores concorrentes.
+ *
+ * Sem isso, duas chamadas autenticadas disparadas em paralelo (ex.: reload de
+ * página) poderiam cada uma tentar renovar a sessão com o mesmo cookie — e o
+ * backend revoga a sessão inteira ao detectar reuso de um refresh token já
+ * rotacionado. Deduplicar garante que só um POST /auth/refresh saia por vez.
+ */
+let refrescandoPromise: Promise<Usuario | null> | null = null;
+
 /** Tenta restaurar a sessão pelo cookie de refresh. Null = não logado. */
 export async function renovarSessao(): Promise<Usuario | null> {
-  try {
-    const corpo = await requisicao<RespostaSessao>("/auth/refresh", { method: "POST" });
-    accessToken = corpo.accessToken;
-    definirCacheUsuario(corpo.usuario);
-    return corpo.usuario;
-  } catch {
-    accessToken = null;
-    limparCacheUsuario();
-    return null;
-  }
+  if (refrescandoPromise) return refrescandoPromise;
+
+  refrescandoPromise = (async () => {
+    try {
+      const corpo = await requisicao<RespostaSessao>("/auth/refresh", { method: "POST" });
+      accessToken = corpo.accessToken;
+      definirCacheUsuario(corpo.usuario);
+      return corpo.usuario;
+    } catch {
+      accessToken = null;
+      limparCacheUsuario();
+      return null;
+    } finally {
+      refrescandoPromise = null;
+    }
+  })();
+
+  return refrescandoPromise;
 }
 
 /**
@@ -246,7 +279,7 @@ export type AvaliacaoIA = {
 
 export type UsoRoteiros = {
   usadosNoMes: number;
-  limiteMensal: number | null;
+  limiteMensal: number;
 };
 
 export type RoteiroSalvo = {
@@ -274,6 +307,23 @@ export type ResultadoGeracao = {
   uso: UsoRoteiros;
 };
 
+/**
+ * Item da listagem (GET /roteiros/meus) — a API devolve só campos leves aqui
+ * (sem gancho/problema/virada/prova/cta, ver backend/src/routes/roteiros.ts).
+ * Use buscarRoteiro() para pegar o texto completo de um item específico.
+ */
+export type RoteiroResumo = {
+  id: string;
+  tema: string;
+  formato: string;
+  tom: string;
+  notas: NotasAvaliacao;
+  notaFinal: number;
+  aprovado: boolean;
+  tentativas: number;
+  criadoEm: string;
+};
+
 export async function gerarRoteiro(dados: {
   tema: string;
   formato: string;
@@ -288,10 +338,14 @@ export async function gerarRoteiro(dados: {
 }
 
 export async function listarMeusRoteiros(): Promise<{
-  roteiros: RoteiroSalvo[];
+  roteiros: RoteiroResumo[];
   uso: UsoRoteiros;
 }> {
-  return requisicao<{ roteiros: RoteiroSalvo[]; uso: UsoRoteiros }>("/roteiros/meus");
+  return requisicao<{ roteiros: RoteiroResumo[]; uso: UsoRoteiros }>("/roteiros/meus");
+}
+
+export async function buscarRoteiro(id: string): Promise<{ roteiro: RoteiroSalvo }> {
+  return requisicao<{ roteiro: RoteiroSalvo }>(`/roteiros/${id}`);
 }
 
 export async function deletarMeuRoteiro(id: string): Promise<void> {

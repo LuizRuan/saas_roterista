@@ -12,6 +12,7 @@ import { reservarUsoMensal, liberarUsoMensal, inicioDoMes } from "../services/us
 import { env } from "../config/env";
 
 const LIMITE_MENSAL_FREE = 5;
+const LIMITE_MENSAL_PRO = 50;
 
 /** Envolve handler async para o Express 4 capturar erros rejeitados. */
 function rotaAsync(handler: RequestHandler): RequestHandler {
@@ -74,27 +75,22 @@ roteirosRouter.post(
     }
 
     const usuarioId = req.usuarioId!;
-    const papel = req.usuarioPapel;
 
     // Reserva atômica da vaga mensal — fecha a race condition de
-    // requisições concorrentes (ver services/uso-mensal.ts). Continua rodando
-    // pra plano "pro" (pra manter o contador de uso correto), mas só bloqueia
-    // quem não é admin nem pro.
-    let usadosNoMes = 0;
-    let ilimitado = papel === "admin";
-    if (papel !== "admin") {
-      const reserva = await reservarUsoMensal(usuarioId);
-      usadosNoMes = reserva.quantidade;
-      ilimitado = reserva.plano === "pro";
+    // requisições concorrentes (ver services/uso-mensal.ts). O limite depende
+    // só do plano (free/pro); papel "admin" não dá bypass de cota, apenas de
+    // permissões administrativas.
+    const reserva = await reservarUsoMensal(usuarioId);
+    const usadosNoMes = reserva.quantidade;
+    const limiteMensal = reserva.plano === "pro" ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
 
-      if (!ilimitado && usadosNoMes > LIMITE_MENSAL_FREE) {
-        res.status(429).json({
-          erro: `Você atingiu o limite de ${LIMITE_MENSAL_FREE} roteiros por mês no plano gratuito. Novos roteiros liberam no próximo mês.`,
-          limite: LIMITE_MENSAL_FREE,
-          usados: LIMITE_MENSAL_FREE,
-        });
-        return;
-      }
+    if (usadosNoMes > limiteMensal) {
+      res.status(429).json({
+        erro: `Você atingiu o limite de ${limiteMensal} roteiros por mês no plano ${reserva.plano}. Novos roteiros liberam no próximo mês.`,
+        limite: limiteMensal,
+        usados: limiteMensal,
+      });
+      return;
     }
 
     const config = req.body;
@@ -107,7 +103,7 @@ roteirosRouter.post(
     } catch (erro) {
       // Geração falhou — libera a vaga reservada para não consumir o limite
       // mensal do usuário por uma falha da IA.
-      if (papel !== "admin") await liberarUsoMensal(usuarioId);
+      await liberarUsoMensal(usuarioId);
       throw erro;
     }
 
@@ -138,8 +134,8 @@ roteirosRouter.post(
         tentativas: resultado.tentativas,
       },
       uso: {
-        usadosNoMes: papel === "admin" ? 0 : usadosNoMes,
-        limiteMensal: ilimitado ? null : LIMITE_MENSAL_FREE,
+        usadosNoMes,
+        limiteMensal,
       },
     });
   })
@@ -170,16 +166,16 @@ roteirosRouter.get(
         usuarioId: req.usuarioId,
         createdAt: { $gte: inicioDoMes() },
       }),
-      // Query isolada e pequena — só pra saber se o plano é "pro" (sem limite).
+      // Query isolada e pequena — só pra saber o plano e aplicar o limite certo.
       UsuarioModel.findById(req.usuarioId).select("plano").lean(),
     ]);
-    const ilimitado = req.usuarioPapel === "admin" || usuario?.plano === "pro";
+    const limiteMensal = usuario?.plano === "pro" ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
 
     res.json({
       roteiros: roteiros.map(roteiroPublico),
       uso: {
         usadosNoMes,
-        limiteMensal: ilimitado ? null : LIMITE_MENSAL_FREE,
+        limiteMensal,
       },
     });
   })

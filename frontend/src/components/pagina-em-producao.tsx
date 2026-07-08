@@ -5,11 +5,13 @@ import Link from "next/link";
  * (cadastro, login, planos, termos, privacidade).
  */
 export function PaginaEmProducao({
+  eyebrow = "[Em produção]",
   titulo,
   texto,
   voltar = "/",
   voltarTexto = "Voltar para o início",
 }: {
+  eyebrow?: string;
   titulo: string;
   texto: string;
   voltar?: string;
@@ -18,7 +20,7 @@ export function PaginaEmProducao({
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
       <p className="font-mono text-xs font-semibold uppercase tracking-widest text-rec">
-        [Em produção]
+        {eyebrow}
       </p>
       <h1 className="mt-4 max-w-xl font-display text-4xl tracking-tight sm:text-5xl">
         {titulo}

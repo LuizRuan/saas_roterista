@@ -7,8 +7,10 @@ import {
   sair,
   usuarioAtual,
   listarMeusRoteiros,
+  buscarRoteiro,
   deletarMeuRoteiro,
   type Usuario,
+  type RoteiroResumo,
   type RoteiroSalvo,
   type UsoRoteiros,
 } from "@/lib/api";
@@ -76,20 +78,49 @@ function CardRoteiro({
   onDeletar,
   deletando,
 }: {
-  roteiro: RoteiroSalvo;
+  roteiro: RoteiroResumo;
   onDeletar: (id: string) => void;
   deletando: boolean;
 }) {
   const [expandido, setExpandido] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [completo, setCompleto] = useState<RoteiroSalvo | null>(null);
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
+  const [erroDetalhe, setErroDetalhe] = useState(false);
+
+  // A listagem não traz o texto do roteiro (gancho/problema/...) — busca sob
+  // demanda ao expandir ou copiar, e guarda em cache local.
+  async function buscarDetalhe(): Promise<RoteiroSalvo | null> {
+    if (completo) return completo;
+    setCarregandoDetalhe(true);
+    setErroDetalhe(false);
+    try {
+      const { roteiro: detalhe } = await buscarRoteiro(roteiro.id);
+      setCompleto(detalhe);
+      return detalhe;
+    } catch {
+      setErroDetalhe(true);
+      return null;
+    } finally {
+      setCarregandoDetalhe(false);
+    }
+  }
+
+  async function aoAlternarExpandido() {
+    const abrindo = !expandido;
+    setExpandido(abrindo);
+    if (abrindo && !completo) await buscarDetalhe();
+  }
 
   async function copiar() {
+    const detalhe = await buscarDetalhe();
+    if (!detalhe) return;
     const texto =
-      `[GANCHO · 0–3s]\n${roteiro.gancho}\n\n` +
-      `[PROBLEMA · 3–12s]\n${roteiro.problema}\n\n` +
-      `[VIRADA · 12–25s]\n${roteiro.virada}\n\n` +
-      `[PROVA · 25–45s]\n${roteiro.prova}\n\n` +
-      `[CALL TO ACTION · 45s+]\n${roteiro.cta}`;
+      `[GANCHO · 0–3s]\n${detalhe.gancho}\n\n` +
+      `[PROBLEMA · 3–12s]\n${detalhe.problema}\n\n` +
+      `[VIRADA · 12–25s]\n${detalhe.virada}\n\n` +
+      `[PROVA · 25–45s]\n${detalhe.prova}\n\n` +
+      `[CALL TO ACTION · 45s+]\n${detalhe.cta}`;
     await navigator.clipboard.writeText(texto);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
@@ -106,7 +137,7 @@ function CardRoteiro({
       {/* Header do card */}
       <div
         className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4"
-        onClick={() => setExpandido((v) => !v)}
+        onClick={aoAlternarExpandido}
       >
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-xs font-semibold text-tinta">
@@ -137,26 +168,38 @@ function CardRoteiro({
       {/* Conteúdo expandido */}
       {expandido && (
         <div className="border-t border-tinta/8">
-          {[
-            { label: "GANCHO", tempo: "0–3s", texto: roteiro.gancho },
-            { label: "PROBLEMA", tempo: "3–12s", texto: roteiro.problema },
-            { label: "VIRADA", tempo: "12–25s", texto: roteiro.virada },
-            { label: "PROVA", tempo: "25–45s", texto: roteiro.prova },
-            { label: "CTA", tempo: "45s+", texto: roteiro.cta },
-          ].map((secao) => (
-            <div
-              key={secao.label}
-              className="border-b border-tinta/8 px-5 py-3 last:border-b-0"
-            >
-              <div className="mb-1 flex items-center gap-2">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-tinta">
-                  {secao.label}
-                </span>
-                <span className="font-mono text-[10px] text-cinza">{secao.tempo}</span>
+          {carregandoDetalhe && (
+            <p className="px-5 py-4 font-mono text-xs text-cinza">Carregando roteiro…</p>
+          )}
+          {erroDetalhe && !carregandoDetalhe && (
+            <p className="px-5 py-4 font-mono text-xs text-rec">
+              Não foi possível carregar o texto do roteiro.{" "}
+              <button type="button" onClick={buscarDetalhe} className="underline">
+                Tentar de novo
+              </button>
+            </p>
+          )}
+          {completo &&
+            [
+              { label: "GANCHO", tempo: "0–3s", texto: completo.gancho },
+              { label: "PROBLEMA", tempo: "3–12s", texto: completo.problema },
+              { label: "VIRADA", tempo: "12–25s", texto: completo.virada },
+              { label: "PROVA", tempo: "25–45s", texto: completo.prova },
+              { label: "CTA", tempo: "45s+", texto: completo.cta },
+            ].map((secao) => (
+              <div
+                key={secao.label}
+                className="border-b border-tinta/8 px-5 py-3 last:border-b-0"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-tinta">
+                    {secao.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-cinza">{secao.tempo}</span>
+                </div>
+                <p className="text-sm leading-relaxed text-tinta-suave">{secao.texto}</p>
               </div>
-              <p className="text-sm leading-relaxed text-tinta-suave">{secao.texto}</p>
-            </div>
-          ))}
+            ))}
 
           {/* Notas */}
           <div className="border-t border-tinta/8 bg-tinta/3 px-5 py-3">
@@ -213,7 +256,7 @@ function CardRoteiro({
 export function MeusRoteiros() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [roteiros, setRoteiros] = useState<RoteiroSalvo[]>([]);
+  const [roteiros, setRoteiros] = useState<RoteiroResumo[]>([]);
   const [uso, setUso] = useState<UsoRoteiros | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [saindo, setSaindo] = useState(false);
@@ -338,22 +381,10 @@ export function MeusRoteiros() {
               <span className="font-mono text-xs tabular-nums text-cinza">
                 {roteiros.length} roteiro{roteiros.length !== 1 ? "s" : ""} salvo{roteiros.length !== 1 ? "s" : ""}
               </span>
-              {uso.limiteMensal != null && (
-                <>
-                  <span className="text-cinza">·</span>
-                  <span className="font-mono text-xs tabular-nums text-tinta-suave">
-                    {uso.usadosNoMes}/{uso.limiteMensal} este mês
-                  </span>
-                </>
-              )}
-              {uso.limiteMensal === null && (
-                <>
-                  <span className="text-cinza">·</span>
-                  <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
-                    Admin · Ilimitado
-                  </span>
-                </>
-              )}
+              <span className="text-cinza">·</span>
+              <span className="font-mono text-xs tabular-nums text-tinta-suave">
+                {uso.usadosNoMes}/{uso.limiteMensal} este mês
+              </span>
             </div>
           )}
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { sair, usuarioAtual, gerarRoteiro as gerarRoteiroApi, listarMeusRoteiros, ErroApi, type Usuario, type AvaliacaoIA, type UsoRoteiros } from "@/lib/api";
+import { primeiraMensagemDeCampos } from "@/lib/validacao";
 import { CabecalhoApp } from "@/components/app/cabecalho-app";
 import { CampoSublinhado } from "@/components/app/campo-sublinhado";
 import { RodapeApp } from "@/components/app/rodape-app";
@@ -229,7 +230,9 @@ export function Designer() {
     } catch (erro) {
       setEtapa("erro");
       setErroMensagem(
-        erro instanceof ErroApi ? erro.message : "Erro ao gerar roteiro. Tente novamente."
+        erro instanceof ErroApi
+          ? primeiraMensagemDeCampos(erro.campos) ?? erro.message
+          : "Erro ao gerar roteiro. Tente novamente."
       );
     }
   }
@@ -268,7 +271,7 @@ export function Designer() {
 
   const temaTamanho = config.tema.length;
   const podeCriar = temaTamanho > 0 && temaTamanho <= 280;
-  const limiteAtingido = uso && uso.limiteMensal !== null && uso.usadosNoMes >= uso.limiteMensal;
+  const limiteAtingido = uso ? uso.usadosNoMes >= uso.limiteMensal : false;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -481,17 +484,11 @@ export function Designer() {
               {/* Contador de uso */}
               {uso && (
                 <div className="mt-4 flex items-center gap-3">
-                  {uso.limiteMensal !== null ? (
-                    <span className={`font-mono text-xs tabular-nums ${
-                      limiteAtingido ? "font-semibold text-rec" : "text-cinza"
-                    }`}>
-                      {uso.usadosNoMes}/{uso.limiteMensal} roteiros neste mês
-                    </span>
-                  ) : (
-                    <span className="rounded-sm bg-rec px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-papel">
-                      Admin · Ilimitado
-                    </span>
-                  )}
+                  <span className={`font-mono text-xs tabular-nums ${
+                    limiteAtingido ? "font-semibold text-rec" : "text-cinza"
+                  }`}>
+                    {uso.usadosNoMes}/{uso.limiteMensal} roteiros neste mês
+                  </span>
                   {limiteAtingido && (
                     <Link
                       href="/planos"

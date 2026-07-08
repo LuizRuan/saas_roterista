@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ErroApi, cadastrar } from "@/lib/api";
-import { cadastroSchema, errosPorCampo } from "@/lib/validacao";
+import { cadastroSchema, errosPorCampo, validarCampo } from "@/lib/validacao";
 import { BotaoEnviar } from "./botao-enviar";
 import { Campo } from "./campo";
 import { MolduraAuth } from "./moldura-auth";
@@ -16,6 +16,22 @@ export function FormularioCadastro() {
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // Revalida um campo isolado e limpa/atualiza seu erro — só entra em ação
+  // depois que o campo já mostrou algum erro, pra não validar em cima de
+  // campos ainda intocados.
+  function revalidarCampo(campo: string, valor: unknown) {
+    setErros((atual) => {
+      if (!atual[campo]) return atual;
+      const mensagem = validarCampo(cadastroSchema, campo, valor);
+      if (!mensagem) {
+        const resto = { ...atual };
+        delete resto[campo];
+        return resto;
+      }
+      return { ...atual, [campo]: mensagem };
+    });
+  }
 
   async function aoEnviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -94,6 +110,7 @@ export function FormularioCadastro() {
           autoComplete="name"
           placeholder="Como quer ser chamado"
           erro={erros.nome}
+          onChange={(e) => revalidarCampo("nome", e.target.value)}
         />
         <Campo
           id="email"
@@ -103,6 +120,7 @@ export function FormularioCadastro() {
           autoComplete="email"
           placeholder="voce@exemplo.com"
           erro={erros.email}
+          onChange={(e) => revalidarCampo("email", e.target.value)}
         />
         <Campo
           id="senha"
@@ -113,6 +131,7 @@ export function FormularioCadastro() {
           placeholder="••••••••"
           dica="Mín. 8 caracteres, com letra e número. Sem espaços."
           erro={erros.senha}
+          onChange={(e) => revalidarCampo("senha", e.target.value)}
         />
 
         <div>
@@ -123,6 +142,7 @@ export function FormularioCadastro() {
               className="mt-0.5 size-4 shrink-0 rounded border-tinta/30 accent-tinta"
               aria-invalid={erros.aceitouTermos ? true : undefined}
               aria-describedby={erros.aceitouTermos ? "aceitouTermos-erro" : undefined}
+              onChange={(e) => revalidarCampo("aceitouTermos", e.target.checked)}
             />
             <span>
               Li e aceito os{" "}

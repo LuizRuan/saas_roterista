@@ -5,7 +5,7 @@ const exemplos = [
   {
     nicho: "Finanças pessoais",
     formato: "Reels · ~45s",
-    gancho: "“Você perde R$ 30 por dia sem perceber.”",
+    gancho: "“Seu Pix está roubando dinheiro de você todos os dias.”",
     linhas: [
       "[00:05] os 3 vazamentos invisíveis do seu Pix",
       "[00:22] texto na tela: “o nº 3 tá no seu bolso agora”",
@@ -15,7 +15,7 @@ const exemplos = [
   {
     nicho: "Fitness",
     formato: "Shorts · ~35s",
-    gancho: "“Treinar todo dia está atrasando seu shape.”",
+    gancho: "“Treinar mais não faz você crescer mais.”",
     linhas: [
       "[00:04] corte seco — por que descanso constrói músculo",
       "[00:18] demonstração: divisão de treino em 4 dias",
@@ -25,7 +25,7 @@ const exemplos = [
   {
     nicho: "Estudos & concursos",
     formato: "TikTok · ~40s",
-    gancho: "“Estudar 8 horas por dia é a pior dica que você já recebeu.”",
+    gancho: "“Você não está reprovando porque estuda pouco.”",
     linhas: [
       "[00:05] o método de 90 minutos que aprova mais",
       "[00:24] texto na tela: “ciclo 3 × 30”",
