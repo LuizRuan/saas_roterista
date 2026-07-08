@@ -22,10 +22,22 @@ export interface RoteiroGerado {
   cta: string;
 }
 
+/** Sorteia até `n` padrões distintos (Fisher-Yates parcial) — evita mandar
+ * sempre a mesma lista na mesma ordem, o que ancora o modelo na fraseologia
+ * dos exemplos e produz roteiros formulaicos entre temas diferentes. */
+function amostrarPadroes(padroes: PadraoViralDoc[], n: number): PadraoViralDoc[] {
+  const copia = [...padroes];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia.slice(0, n);
+}
+
 function montarContextoPadroes(padroes: PadraoViralDoc[]): string {
   if (padroes.length === 0) return "Nenhum padrão de referência disponível.";
 
-  return padroes
+  return amostrarPadroes(padroes, 3)
     .map(
       (p, i) =>
         `--- PADRÃO ${i + 1}: "${p.titulo}" (${p.formato}, tom ${p.tom}) ---\n` +
@@ -48,6 +60,8 @@ REGRAS:
 - Use linguagem natural, conversacional, adaptada ao tom pedido.
 - Nunca use emojis nem hashtags no roteiro.
 - Nunca copie os padrões de referência — use-os apenas como inspiração estrutural.
+- EVITE frases de transição genéricas e intercambiáveis como "existe um segredo que...", "a chave é...", "mas a verdade é que...", "a maioria pensa X, mas na verdade é Y". Elas servem pra qualquer tema e deixam o roteiro sem personalidade.
+- A VIRADA e a PROVA devem trazer um detalhe concreto e específico DESTE tema (um número real, um exemplo, um passo prático) — algo que não caberia num roteiro de outro assunto.
 
 FORMATO DE RESPOSTA (JSON):
 {

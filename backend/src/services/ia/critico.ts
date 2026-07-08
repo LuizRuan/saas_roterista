@@ -36,6 +36,8 @@ DIMENSÕES DE AVALIAÇÃO:
 REGRAS:
 - Responda APENAS com JSON válido no formato especificado.
 - Seja rigoroso mas justo — notas altas significam que o roteiro realmente é excelente.
+- Dê cada nota com UMA casa decimal (ex.: 7.4, 8.6, 6.9), refletindo diferenças reais entre roteiros. EVITE números redondos como 7.0, 8.0, 9.0 — quase nenhum roteiro é exatamente redondo.
+- Duas dimensões raramente merecem a mesma nota — avalie cada uma pelo seu próprio mérito.
 - Se a nota final for menor que 8, liste de 2 a 4 melhorias ESPECÍFICAS e acionáveis.
 - Nunca dê nota 10 em todas as dimensões — sempre há algo a melhorar.
 - Cada melhoria deve dizer exatamente O QUE mudar e COMO.
@@ -43,11 +45,11 @@ REGRAS:
 FORMATO DE RESPOSTA (JSON):
 {
   "notas": {
-    "gancho": 8,
-    "retencao": 7,
-    "cta": 9,
-    "clareza": 6,
-    "adequacao": 8
+    "gancho": 8.4,
+    "retencao": 7.2,
+    "cta": 9.1,
+    "clareza": 6.7,
+    "adequacao": 8.3
   },
   "melhorias": [
     "Melhoria específica 1...",
@@ -116,5 +118,7 @@ export async function avaliarRoteiro(
 
 function clamp(n: number): number {
   if (isNaN(n)) return 5;
-  return Math.max(0, Math.min(10, Math.round(n)));
+  // Preserva uma casa decimal — arredondar pra inteiro colapsava toda a
+  // variação e fazia roteiros diferentes convergirem pra mesma nota final.
+  return Math.max(0, Math.min(10, Math.round(n * 10) / 10));
 }

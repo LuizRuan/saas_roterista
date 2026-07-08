@@ -198,8 +198,8 @@ describe("IDOR — um usuário não pode acessar roteiro de outro", () => {
   });
 });
 
-describe("Plano pro — sem limite mensal de geração", () => {
-  it("gera mais de 5 roteiros no mês sem ser bloqueado, e a resposta traz limiteMensal: null", async () => {
+describe("Plano pro — limite mensal de 50 gerações", () => {
+  it("gera mais de 5 roteiros no mês sem ser bloqueado, e a resposta traz limiteMensal: 50", async () => {
     const { accessToken } = await criarUsuarioProComToken();
 
     for (let i = 0; i < 7; i++) {
@@ -209,11 +209,11 @@ describe("Plano pro — sem limite mensal de geração", () => {
         .send(corpoGerar);
 
       expect(res.status).toBe(200);
-      expect(res.body.uso.limiteMensal).toBeNull();
+      expect(res.body.uso.limiteMensal).toBe(50);
     }
   });
 
-  it("GET /roteiros/meus devolve limiteMensal: null para quem já gerou mais de 5 no mês", async () => {
+  it("GET /roteiros/meus devolve limiteMensal: 50 para quem já gerou mais de 5 no mês", async () => {
     const { accessToken } = await criarUsuarioProComToken();
 
     for (let i = 0; i < 6; i++) {
@@ -228,7 +228,7 @@ describe("Plano pro — sem limite mensal de geração", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.uso.limiteMensal).toBeNull();
+    expect(res.body.uso.limiteMensal).toBe(50);
     expect(res.body.uso.usadosNoMes).toBe(6);
   });
 });

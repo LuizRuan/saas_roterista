@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { sair, usuarioAtual, listarMeusRoteiros, type Usuario, type UsoRoteiros } from "@/lib/api";
+import { sair, usuarioAtual, listarMeusRoteiros, type Usuario, type UsoRoteiros, type RoteiroResumo } from "@/lib/api";
 import { CabecalhoApp } from "@/components/app/cabecalho-app";
 import { RodapeApp } from "@/components/app/rodape-app";
 
@@ -152,6 +152,31 @@ function RoteiroVazioEstado() {
   );
 }
 
+function ListaRoteirosRecentes({ roteiros }: { roteiros: RoteiroResumo[] }) {
+  return (
+    <div className="divide-y divide-tinta/10 border border-tinta/15 bg-papel-card">
+      {roteiros.map((roteiro) => (
+        <Link
+          key={roteiro.id}
+          href="/roteiros"
+          className="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-tinta/3"
+        >
+          <p className="truncate font-mono text-xs font-semibold text-tinta">
+            {roteiro.tema}
+          </p>
+          <span
+            className={`shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
+              roteiro.aprovado ? "bg-marca/20 text-tinta" : "bg-rec/10 text-rec"
+            }`}
+          >
+            {roteiro.notaFinal}/10
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function AnatomiaViral() {
   const itens = [
     { sigla: "G", nome: "Gancho", desc: "0–3s · prende antes do swipe", cor: "bg-rec" },
@@ -261,6 +286,7 @@ export function Painel() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [uso, setUso] = useState<UsoRoteiros | null>(null);
   const [totalRoteiros, setTotalRoteiros] = useState(0);
+  const [roteirosRecentes, setRoteirosRecentes] = useState<RoteiroResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [saindo, setSaindo] = useState(false);
   const [mostrarConteudo, setMostrarConteudo] = useState(false);
@@ -281,6 +307,8 @@ export function Painel() {
         if (dadosRoteiros) {
           setUso(dadosRoteiros.uso);
           setTotalRoteiros(dadosRoteiros.roteiros.length);
+          // A API já devolve ordenado por mais recente primeiro.
+          setRoteirosRecentes(dadosRoteiros.roteiros.slice(0, 3));
         }
         setCarregando(false);
         setTimeout(() => setMostrarConteudo(true), 100);
@@ -464,7 +492,11 @@ export function Painel() {
               <p className="mb-4 font-mono text-xs font-semibold uppercase tracking-widest text-tinta-suave">
                 Roteiros recentes
               </p>
-              <RoteiroVazioEstado />
+              {roteirosRecentes.length > 0 ? (
+                <ListaRoteirosRecentes roteiros={roteirosRecentes} />
+              ) : (
+                <RoteiroVazioEstado />
+              )}
             </div>
           </div>
 
