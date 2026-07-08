@@ -17,3 +17,19 @@ export async function promoverAdmin(email: string): Promise<boolean> {
   );
   return resultado.matchedCount > 0;
 }
+
+/**
+ * Muda o plano de uma conta existente para "pro".
+ *
+ * Não precisa revogar a sessão ativa — o plano não afeta o papel usado na
+ * autenticação, só limites de uso, que já são checados a cada requisição.
+ *
+ * Retorna true se encontrou e atualizou a conta, false se o e-mail não existe.
+ */
+export async function promoverPro(email: string): Promise<boolean> {
+  const resultado = await UsuarioModel.updateOne(
+    { email: email.toLowerCase().trim() },
+    { $set: { plano: "pro" } }
+  );
+  return resultado.matchedCount > 0;
+}

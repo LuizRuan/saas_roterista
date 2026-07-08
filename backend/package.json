@@ -11,7 +11,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "promover-admin": "tsx scripts/promover-admin.ts"
+    "promover-admin": "tsx scripts/promover-admin.ts",
+    "promover-pro": "tsx scripts/promover-pro.ts"
   },
   "engines": {
     "node": ">=20"

@@ -4,17 +4,17 @@ import { Reveal } from "./reveal";
 
 const planoFree = [
   "5 roteiros por mês",
-  "Entrada por título/tema",
-  "Estrutura: gancho + desenvolvimento + CTA",
+  "Tema personalizado",
+  "Público-alvo personalizado",
   "Modelo de IA básico",
 ];
 
 const planoPro = [
-  "Roteiros ilimitados",
-  "Controle de nicho, tom, formato e tipo de edição",
-  "Gancho alternativo para teste A/B",
-  "Marcação de tempo + indicações de corte",
+  "50 roteiros por mês",
   "Modelo de IA premium e prioridade de geração",
+  "Mais chances de criar vídeos que prendem a atenção",
+  "Tom narrativo personalizado",
+  "Gancho personalizado",
 ];
 
 export function Planos() {
