@@ -28,7 +28,7 @@ body {
 
 /* Foco visível em tudo que é interativo */
 :focus-visible {
-  outline: 2px solid var(--color-rec);
+  outline: 2px solid color-mix(in srgb, var(--color-tinta) 50%, transparent);
   outline-offset: 3px;
   border-radius: 2px;
 }

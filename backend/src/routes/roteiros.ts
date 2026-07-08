@@ -160,19 +160,19 @@ roteirosRouter.get(
     agendarLimpezaRoteiros();
 
     // I2: projeção — sem gancho/problema/virada/prova/cta na listagem
-    const roteiros = await RoteiroModel.find({ usuarioId: req.usuarioId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .select("tema formato tom notaFinal aprovado tentativas notas criadoEm createdAt");
-
-    // Uso mensal
-    const usadosNoMes = await RoteiroModel.countDocuments({
-      usuarioId: req.usuarioId,
-      createdAt: { $gte: inicioDoMes() },
-    });
-
-    // Query isolada e pequena — só pra saber se o plano é "pro" (sem limite).
-    const usuario = await UsuarioModel.findById(req.usuarioId).select("plano").lean();
+    // Em paralelo — as 3 queries são independentes entre si.
+    const [roteiros, usadosNoMes, usuario] = await Promise.all([
+      RoteiroModel.find({ usuarioId: req.usuarioId })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select("tema formato tom notaFinal aprovado tentativas notas criadoEm createdAt"),
+      RoteiroModel.countDocuments({
+        usuarioId: req.usuarioId,
+        createdAt: { $gte: inicioDoMes() },
+      }),
+      // Query isolada e pequena — só pra saber se o plano é "pro" (sem limite).
+      UsuarioModel.findById(req.usuarioId).select("plano").lean(),
+    ]);
     const ilimitado = req.usuarioPapel === "admin" || usuario?.plano === "pro";
 
     res.json({

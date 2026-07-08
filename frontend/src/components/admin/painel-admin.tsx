@@ -96,7 +96,7 @@ export function PainelAdmin() {
     let ativo = true;
     async function carregar() {
       try {
-        const u = await usuarioAtual();
+        const [u, lista] = await Promise.all([usuarioAtual(), listarPadroes()]);
         if (!ativo) return;
 
         if (!u || u.papel !== "admin") {
@@ -105,8 +105,6 @@ export function PainelAdmin() {
         }
 
         setUsuario(u);
-        const lista = await listarPadroes();
-        if (!ativo) return;
         setPadroes(lista);
         setCarregando(false);
         setTimeout(() => setMostrarConteudo(true), 80);

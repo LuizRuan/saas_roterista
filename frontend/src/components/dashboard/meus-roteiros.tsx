@@ -226,13 +226,10 @@ export function MeusRoteiros() {
     let ativo = true;
     async function carregar() {
       try {
-        const u = await usuarioAtual();
+        const [u, dados] = await Promise.all([usuarioAtual(), listarMeusRoteiros()]);
         if (!ativo) return;
         if (!u) { router.replace("/login"); return; }
         setUsuario(u);
-
-        const dados = await listarMeusRoteiros();
-        if (!ativo) return;
         setRoteiros(dados.roteiros);
         setUso(dados.uso);
         setCarregando(false);

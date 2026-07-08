@@ -153,16 +153,14 @@ export function Designer() {
     let ativo = true;
     async function init() {
       try {
-        const u = await usuarioAtual();
+        const [u, dadosRoteiros] = await Promise.all([
+          usuarioAtual(),
+          listarMeusRoteiros().catch(() => null),
+        ]);
         if (!ativo) return;
         if (!u) { router.replace("/login"); return; }
         setUsuario(u);
-
-        // Carregar uso mensal
-        try {
-          const dados = await listarMeusRoteiros();
-          if (ativo) setUso(dados.uso);
-        } catch { /* sem problema se falhar */ }
+        if (dadosRoteiros) setUso(dadosRoteiros.uso);
 
         setCarregando(false);
       } catch {

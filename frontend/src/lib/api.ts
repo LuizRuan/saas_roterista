@@ -16,6 +16,32 @@ export type Usuario = {
  */
 let accessToken: string | null = null;
 
+/**
+ * Cache curto do usuário logado — evita bater em /auth/eu a cada troca de tela.
+ * TTL curto para não deixar dados como plano/nome desatualizados por muito tempo.
+ */
+let usuarioCache: Usuario | null = null;
+let usuarioCacheTimestamp: number | null = null;
+const TTL_CACHE_USUARIO_MS = 45_000;
+
+function definirCacheUsuario(usuario: Usuario): void {
+  usuarioCache = usuario;
+  usuarioCacheTimestamp = Date.now();
+}
+
+function limparCacheUsuario(): void {
+  usuarioCache = null;
+  usuarioCacheTimestamp = null;
+}
+
+function cacheUsuarioValido(): boolean {
+  return (
+    usuarioCache !== null &&
+    usuarioCacheTimestamp !== null &&
+    Date.now() - usuarioCacheTimestamp < TTL_CACHE_USUARIO_MS
+  );
+}
+
 export class ErroApi extends Error {
   status: number;
   campos?: Record<string, string[]>;
@@ -53,6 +79,7 @@ async function requisicao<T>(caminho: string, init: RequestInit = {}): Promise<T
 
   const corpo = (await res.json().catch(() => null)) as CorpoJson | null;
   if (!res.ok) {
+    if (res.status === 401) limparCacheUsuario();
     throw new ErroApi(
       res.status,
       typeof corpo?.erro === "string" ? corpo.erro : "Erro inesperado. Tente novamente.",
@@ -71,20 +98,24 @@ export async function cadastrar(dados: {
   aceitouTermos: boolean;
   turnstileToken: string;
 }): Promise<Usuario> {
+  limparCacheUsuario();
   const corpo = await requisicao<RespostaSessao>("/auth/cadastro", {
     method: "POST",
     body: JSON.stringify(dados),
   });
   accessToken = corpo.accessToken;
+  definirCacheUsuario(corpo.usuario);
   return corpo.usuario;
 }
 
 export async function entrar(dados: { email: string; senha: string }): Promise<Usuario> {
+  limparCacheUsuario();
   const corpo = await requisicao<RespostaSessao>("/auth/login", {
     method: "POST",
     body: JSON.stringify(dados),
   });
   accessToken = corpo.accessToken;
+  definirCacheUsuario(corpo.usuario);
   return corpo.usuario;
 }
 
@@ -93,6 +124,7 @@ export async function sair(): Promise<void> {
     await requisicao<null>("/auth/logout", { method: "POST" });
   } finally {
     accessToken = null;
+    limparCacheUsuario();
   }
 }
 
@@ -101,22 +133,32 @@ export async function renovarSessao(): Promise<Usuario | null> {
   try {
     const corpo = await requisicao<RespostaSessao>("/auth/refresh", { method: "POST" });
     accessToken = corpo.accessToken;
+    definirCacheUsuario(corpo.usuario);
     return corpo.usuario;
   } catch {
     accessToken = null;
+    limparCacheUsuario();
     return null;
   }
 }
 
-/** Usuário logado atual — renova a sessão automaticamente se o access expirou. */
+/**
+ * Usuário logado atual — renova a sessão automaticamente se o access expirou.
+ * Usa um cache curto (TTL_CACHE_USUARIO_MS) para evitar bater em /auth/eu a
+ * cada troca de tela; o cache nunca sobrevive a logout, 401 ou refresh inválido.
+ */
 export async function usuarioAtual(): Promise<Usuario | null> {
+  if (accessToken && cacheUsuarioValido()) return usuarioCache;
+
   if (!accessToken) return renovarSessao();
 
   try {
     const corpo = await requisicao<{ usuario: Usuario }>("/auth/eu");
+    definirCacheUsuario(corpo.usuario);
     return corpo.usuario;
   } catch (erro) {
     if (erro instanceof ErroApi && erro.status === 401) return renovarSessao();
+    limparCacheUsuario();
     throw erro;
   }
 }

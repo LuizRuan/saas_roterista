@@ -23,14 +23,12 @@ export default function PaginaEditarPadrao() {
     let ativo = true;
     async function carregar() {
       try {
-        const u = await usuarioAtual();
+        const [u, lista] = await Promise.all([usuarioAtual(), listarPadroes()]);
         if (!ativo) return;
         if (!u || u.papel !== "admin") { router.replace("/dashboard"); return; }
         setUsuario(u);
 
         // Busca o padrão pelo id na lista
-        const lista = await listarPadroes();
-        if (!ativo) return;
         const encontrado = lista.find((p) => p.id === id);
         if (!encontrado) { setNaoEncontrado(true); setCarregando(false); return; }
         setPadrao(encontrado);
