@@ -19,6 +19,9 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().default(""),
   // E-mail (recuperação de senha) — resend.com (100 emails/dia grátis)
   RESEND_API_KEY: z.string().default(""),
+  // Opcional — se definido, recebe alerta por e-mail quando algo crítico
+  // quebra em produção (IA fora do ar, banco caiu, exceção não tratada).
+  ALERTA_EMAIL: z.string().default(""),
   // CAPTCHA anti-bot (cadastro e recuperação de senha) — Cloudflare Turnstile.
   // Opcional em dev; sem ela a verificação é pulada (log de aviso).
   TURNSTILE_SECRET_KEY: z.string().default(""),

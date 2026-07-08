@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { env } from "../config/env";
 import { UsuarioModel, usuarioPublico, type UsuarioDoc } from "../models/usuario";
+import { RoteiroModel } from "../models/roteiro";
 import { cadastroSchema, loginSchema } from "../schemas/auth";
 import { validarBody } from "../middleware/validar";
 import { autenticar } from "../middleware/autenticar";
@@ -233,6 +234,42 @@ authRouter.get(
       return;
     }
     res.json({ usuario: usuarioPublico(usuario) });
+  })
+);
+
+const excluirContaSchema = z.object({
+  senha: z.string().min(1, "Informe sua senha."),
+});
+
+/**
+ * DELETE /auth/conta
+ * Exclusão definitiva (não soft-delete) — direito ao esquecimento da LGPD,
+ * prometido na Política de Privacidade. Exige reautenticação com a senha
+ * atual antes de apagar, por ser uma ação irreversível.
+ */
+authRouter.delete(
+  "/conta",
+  autenticar,
+  exigirCabecalhoCliente,
+  validarBody(excluirContaSchema),
+  rotaAsync(async (req, res) => {
+    const usuario = await UsuarioModel.findById(req.usuarioId);
+    if (!usuario) {
+      res.status(401).json({ erro: "Conta não encontrada." });
+      return;
+    }
+
+    const senhaOk = await bcrypt.compare(req.body.senha, usuario.senhaHash);
+    if (!senhaOk) {
+      res.status(401).json({ erro: "Senha incorreta." });
+      return;
+    }
+
+    await RoteiroModel.deleteMany({ usuarioId: usuario._id });
+    await UsuarioModel.findByIdAndDelete(usuario._id);
+
+    res.clearCookie(REFRESH_COOKIE, { ...opcoesCookie, maxAge: undefined });
+    res.status(204).end();
   })
 );
 

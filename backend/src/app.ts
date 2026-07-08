@@ -9,6 +9,7 @@ import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { roteirosRouter } from "./routes/roteiros";
 import { logger } from "./lib/logger";
+import { notificarErroCritico } from "./services/alerta";
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/roteiros", roteirosRouter);
 app.use(
   (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     logger.error("api", "Erro não tratado", { erro: err.message, stack: err.stack });
+    notificarErroCritico("Erro não tratado na API", { erro: err.message });
     res.status(500).json({ erro: "Erro interno. Tente novamente." });
   }
 );

@@ -60,3 +60,49 @@ export async function enviarEmailRecuperacao(
 
   return true;
 }
+
+function escaparHtml(valor: unknown): string {
+  return String(valor)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Envia um alerta de erro crítico para ALERTA_EMAIL. Usada por
+ * services/alerta.ts, que decide QUANDO vale alertar (evita virar spam).
+ * Sem ALERTA_EMAIL configurado, não faz nada — mesmo padrão das outras
+ * integrações opcionais do projeto.
+ */
+export async function enviarAlertaErro(
+  assunto: string,
+  detalhes: Record<string, unknown>
+): Promise<void> {
+  if (!env.ALERTA_EMAIL) return;
+
+  const resend = getResend();
+  if (!resend) {
+    logger.warn("email", "RESEND_API_KEY não configurada — alerta de erro não enviado.");
+    return;
+  }
+
+  const linhas = Object.entries(detalhes)
+    .map(
+      ([chave, valor]) =>
+        `<tr><td style="padding:4px 12px 4px 0;color:#999;">${escaparHtml(chave)}</td><td>${escaparHtml(valor)}</td></tr>`
+    )
+    .join("");
+
+  await resend.emails.send({
+    from: "Gancho <onboarding@resend.dev>",
+    to: env.ALERTA_EMAIL,
+    subject: `[Gancho] ${assunto}`,
+    html: `
+      <div style="font-family: monospace; max-width: 560px; margin: 0 auto; padding: 24px;">
+        <h1 style="font-size: 16px; color: #B23A2E;">⚠ ${escaparHtml(assunto)}</h1>
+        <table style="font-size: 13px; border-collapse: collapse;">${linhas}</table>
+        <p style="font-size: 11px; color: #999; margin-top: 16px;">${new Date().toISOString()}</p>
+      </div>
+    `,
+  });
+}

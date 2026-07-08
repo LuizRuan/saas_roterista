@@ -292,6 +292,7 @@ export function Designer() {
         itensNav={[
           { rotulo: "← Voltar", href: "/dashboard" },
           { rotulo: "Designer", ativo: true },
+          { rotulo: "Configurações", href: "/configuracoes" },
         ]}
         badgeAdmin="nenhum"
       />

@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../../config/env";
 import { logger } from "../../lib/logger";
+import { notificarErroCritico } from "../alerta";
 
 /**
  * Abstração do provedor de IA — tenta Groq primeiro, fallback para Gemini.
@@ -117,5 +118,8 @@ export async function gerarComIA(mensagem: MensagemIA): Promise<string> {
     if (texto) return texto;
   }
 
+  notificarErroCritico("IA fora do ar", {
+    motivo: "Groq e Gemini falharam na mesma chamada",
+  });
   throw new Error("Todas as tentativas de geração falharam.");
 }

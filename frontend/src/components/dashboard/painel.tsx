@@ -365,6 +365,7 @@ export function Painel() {
         itensNav={[
           { rotulo: "Início", ativo: true },
           { rotulo: "Designer", href: "/designer" },
+          { rotulo: "Configurações", href: "/configuracoes" },
         ]}
       />
 

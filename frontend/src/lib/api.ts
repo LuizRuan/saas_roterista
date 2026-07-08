@@ -157,6 +157,22 @@ export async function sair(): Promise<void> {
 }
 
 /**
+ * Exclusão definitiva da conta — exige a senha atual. Erro 401 = senha incorreta.
+ * Só limpa a sessão local em caso de sucesso — em caso de senha errada, o
+ * usuário continua autenticado e pode tentar de novo (limpar sempre, mesmo na
+ * falha, derrubaria o access token e a próxima tentativa cairia como "não
+ * autenticado", já que /auth/* fica de fora do retry automático de token).
+ */
+export async function excluirConta(senha: string): Promise<void> {
+  await requisicao<null>("/auth/conta", {
+    method: "DELETE",
+    body: JSON.stringify({ senha }),
+  });
+  accessToken = null;
+  limparCacheUsuario();
+}
+
+/**
  * Renovação em andamento, compartilhada entre chamadores concorrentes.
  *
  * Sem isso, duas chamadas autenticadas disparadas em paralelo (ex.: reload de

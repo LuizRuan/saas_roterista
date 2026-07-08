@@ -337,6 +337,7 @@ export function MeusRoteiros() {
           { rotulo: "← Voltar", href: "/dashboard" },
           { rotulo: "Designer", href: "/designer" },
           { rotulo: "Meus Roteiros", ativo: true },
+          { rotulo: "Configurações", href: "/configuracoes" },
         ]}
         badgeAdmin="nenhum"
       />
