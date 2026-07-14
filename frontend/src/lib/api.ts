@@ -136,7 +136,7 @@ export async function cadastrar(dados: {
   return corpo.usuario;
 }
 
-export async function entrar(dados: { email: string; senha: string; turnstileToken: string }): Promise<Usuario> {
+export async function entrar(dados: { email: string; senha: string }): Promise<Usuario> {
   limparCacheUsuario();
   const corpo = await requisicao<RespostaSessao>("/auth/login", {
     method: "POST",

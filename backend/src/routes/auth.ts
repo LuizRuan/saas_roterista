@@ -164,7 +164,6 @@ authRouter.post(
 authRouter.post(
   "/login",
   limitePorEmail, // I4: limite por e-mail específico
-  exigirTurnstile, // SEC-11: CAPTCHA anti-bot no login
   validarBody(loginSchema),
   rotaAsync(async (req, res) => {
     const { email, senha } = req.body;
