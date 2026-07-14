@@ -23,10 +23,12 @@ import { verificarTurnstile } from "../services/turnstile";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
-const CUSTO_BCRYPT = 12;
+// Cost 10 = ~65ms em CPU fraco (Render free). OWASP recomenda ≥10.
+// Cost 12 levava ~500ms+ no Render, tornando o login perceptivelmente lento.
+const CUSTO_BCRYPT = 10;
 
 // Hash "de mentira" usado para igualar o tempo de resposta quando o e-mail
-// não existe — sem isso, a ausência do bcrypt.compare (que leva ~100ms)
+// não existe — sem isso, a ausência do bcrypt.compare (que leva ~65ms)
 // vaza por timing quais e-mails têm conta, mesmo com a mesma mensagem de erro.
 const HASH_FALSO = bcrypt.hashSync("nenhuma-conta-com-este-email", CUSTO_BCRYPT);
 
@@ -121,8 +123,11 @@ async function abrirSessao(res: Parameters<RequestHandler>[1], usuario: UsuarioD
   const accessToken = gerarAccessToken(usuario._id.toString(), papel);
   const refreshToken = gerarRefreshToken(usuario._id.toString());
 
-  usuario.refreshTokenHash = hashToken(refreshToken);
-  await usuario.save();
+  // updateOne atômico — 1 round-trip ao banco em vez de find+save
+  await UsuarioModel.updateOne(
+    { _id: usuario._id },
+    { $set: { refreshTokenHash: hashToken(refreshToken) } }
+  );
 
   res.cookie(REFRESH_COOKIE, refreshToken, opcoesCookie);
   return accessToken;
