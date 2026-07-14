@@ -45,7 +45,7 @@ app.use(
       if (!origin || origensPermitidas.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Origem não permitida pelo CORS."));
+        callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
       }
     },
     credentials: true,
