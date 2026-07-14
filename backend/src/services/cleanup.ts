@@ -1,4 +1,5 @@
 import { RoteiroModel } from "../models/roteiro";
+import { AssinaturaModel } from "../models/assinatura";
 import { logger } from "../lib/logger";
 
 /**
@@ -8,6 +9,8 @@ import { logger } from "../lib/logger";
  * - Mantém os 30 roteiros mais recentes de cada usuário
  * - Roda no máximo 1x por hora (flag em memória)
  * - Não bloqueia nenhuma request — roda em background
+ *
+ * Também expira pagamentos PIX pendentes cujo prazo já passou.
  */
 
 let ultimaLimpeza = 0;
@@ -20,8 +23,11 @@ export function agendarLimpezaRoteiros(): void {
   ultimaLimpeza = agora;
 
   // Fire-and-forget — não bloqueia a request
-  limparRoteirosAntigos().catch((err) =>
-    logger.warn("cleanup", "Erro na limpeza de roteiros", { erro: (err as Error).message })
+  Promise.all([
+    limparRoteirosAntigos(),
+    expirarPagamentosPendentes(),
+  ]).catch((err) =>
+    logger.warn("cleanup", "Erro na limpeza periódica", { erro: (err as Error).message })
   );
 }
 
@@ -47,5 +53,21 @@ async function limparRoteirosAntigos(): Promise<void> {
       await RoteiroModel.deleteMany({ _id: { $in: ids } });
       logger.info("cleanup", `Removidos ${ids.length} roteiros antigos`, { usuarioId: usuarioId.toString() });
     }
+  }
+}
+
+/**
+ * Expira pagamentos PIX pendentes cujo prazo já passou.
+ *
+ * O polling do frontend já faz isso individualmente, mas este job garante
+ * que pagamentos "órfãos" (usuário fechou a aba) também são expirados.
+ */
+async function expirarPagamentosPendentes(): Promise<void> {
+  const resultado = await AssinaturaModel.updateMany(
+    { status: "pendente", expiraEm: { $lt: new Date() } },
+    { $set: { status: "expirado" } }
+  );
+  if (resultado.modifiedCount > 0) {
+    logger.info("cleanup", `Expirados ${resultado.modifiedCount} pagamentos PIX pendentes`);
   }
 }

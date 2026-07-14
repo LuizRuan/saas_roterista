@@ -399,3 +399,33 @@ export async function resetarSenha(token: string, novaSenha: string): Promise<{ 
     body: JSON.stringify({ token, novaSenha }),
   });
 }
+
+// ─── Pagamentos PIX ─────────────────────────────────────────────────────────
+
+export type DadosPix = {
+  assinaturaId: string;
+  pixCopiaECola: string;
+  qrCodeBase64: string;
+  expiraEm: string;
+  valor: number;
+};
+
+export type StatusPagamento = {
+  status: "pendente" | "pago" | "expirado" | "cancelado";
+  expiraEm: string;
+};
+
+/** Gera código PIX para upgrade ao plano Pro. Retorna dados do PIX + QR. */
+export async function gerarPix(): Promise<DadosPix> {
+  return requisicao<DadosPix>("/pagamentos/pix", { method: "POST" });
+}
+
+/** Polling do status de um pagamento PIX. */
+export async function consultarStatusPagamento(id: string): Promise<StatusPagamento> {
+  return requisicao<StatusPagamento>(`/pagamentos/${id}/status`);
+}
+
+/** Cancela um pagamento PIX pendente. */
+export async function cancelarPagamento(id: string): Promise<void> {
+  await requisicao<null>(`/pagamentos/${id}/cancelar`, { method: "POST" });
+}

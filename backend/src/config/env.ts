@@ -25,6 +25,13 @@ const envSchema = z.object({
   // CAPTCHA anti-bot (cadastro e recuperação de senha) — Cloudflare Turnstile.
   // Opcional em dev; sem ela a verificação é pulada (log de aviso).
   TURNSTILE_SECRET_KEY: z.string().default(""),
+  // Pagamento PIX — chave HMAC para assinar códigos PIX (anti-fraude).
+  // Obrigatória em produção; em dev usa um default inseguro.
+  PIX_HMAC_SECRET: z.string().default("dev-pix-hmac-trocar-em-producao"),
+  // Chave PIX do recebedor (e-mail, CPF, telefone ou chave aleatória).
+  PIX_CHAVE: z.string().default(""),
+  // Valor do plano Pro em centavos (2990 = R$ 29,90).
+  PIX_VALOR_PRO_CENTAVOS: z.coerce.number().default(2990),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -52,6 +59,10 @@ if (env.NODE_ENV === "production") {
     console.error(
       "[env] Em produção, JWT_ACCESS_SECRET e JWT_REFRESH_SECRET são obrigatórios e devem ser diferentes entre si."
     );
+    process.exit(1);
+  }
+  if (!process.env.PIX_HMAC_SECRET) {
+    console.error("[env] PIX_HMAC_SECRET é obrigatória em produção.");
     process.exit(1);
   }
 }

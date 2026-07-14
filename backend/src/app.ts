@@ -8,6 +8,7 @@ import { env } from "./config/env";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { roteirosRouter } from "./routes/roteiros";
+import { pagamentosRouter } from "./routes/pagamentos";
 import { logger } from "./lib/logger";
 import { notificarErroCritico } from "./services/alerta";
 
@@ -43,6 +44,7 @@ app.get("/health", (_req, res) => {
 app.use("/auth", authRouter);
 app.use("/admin", adminRouter);
 app.use("/roteiros", roteirosRouter);
+app.use("/pagamentos", pagamentosRouter);
 
 // Erros inesperados nunca vazam stack trace para o cliente.
 app.use(
