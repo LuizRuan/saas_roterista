@@ -32,6 +32,19 @@ const exigirBanco: RequestHandler = (_req, res, next) => {
 };
 
 /**
+ * SEC-03: Anti-CSRF — exige header customizado `x-cliente: gancho-web`.
+ * Formulários HTML não conseguem enviá-lo, e fetch de outra origem dispara
+ * preflight barrado pelo CORS.
+ */
+const exigirCabecalhoCliente: RequestHandler = (req, res, next) => {
+  if (req.headers["x-cliente"] !== "gancho-web") {
+    res.status(403).json({ erro: "Origem da requisição não reconhecida." });
+    return;
+  }
+  next();
+};
+
+/**
  * Rate limit por usuário — máximo 5 gerações de PIX por hora.
  * Evita spam de códigos PIX e abuso de recursos (QR code, banco).
  */
@@ -62,7 +75,7 @@ const limitePolling = rateLimit({
 
 export const pagamentosRouter = Router();
 
-pagamentosRouter.use(autenticar, exigirBanco);
+pagamentosRouter.use(autenticar, exigirCabecalhoCliente, exigirBanco);
 
 // ─── POST /pagamentos/pix ─────────────────────────────────────────────────────
 // Gera código PIX para upgrade ao plano Pro.

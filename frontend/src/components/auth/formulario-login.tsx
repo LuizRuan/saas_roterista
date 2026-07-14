@@ -9,12 +9,14 @@ import { useEsperaLonga } from "@/hooks/use-espera-longa";
 import { BotaoEnviar } from "./botao-enviar";
 import { Campo } from "./campo";
 import { MolduraAuth } from "./moldura-auth";
+import { Turnstile } from "./turnstile";
 
 export function FormularioLogin() {
   const router = useRouter();
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const acordando = useEsperaLonga(enviando);
 
   function revalidarCampo(campo: string, valor: unknown) {
@@ -47,9 +49,15 @@ export function FormularioLogin() {
     }
     setErros({});
 
+    // SEC-11: exige CAPTCHA antes de enviar
+    if (!turnstileToken) {
+      setErroGeral("Confirme a verificação de segurança antes de continuar.");
+      return;
+    }
+
     setEnviando(true);
     try {
-      await entrar(validado.data);
+      await entrar({ ...validado.data, turnstileToken });
       router.push("/dashboard");
     } catch (erro) {
       setErroGeral(
@@ -109,6 +117,8 @@ export function FormularioLogin() {
           erro={erros.senha}
           onChange={(e) => revalidarCampo("senha", e.target.value)}
         />
+
+        <Turnstile onToken={setTurnstileToken} />
 
         <BotaoEnviar enviando={enviando} rotuloEnviando="Entrando…">
           Entrar

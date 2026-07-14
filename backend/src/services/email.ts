@@ -37,7 +37,7 @@ export async function enviarEmailRecuperacao(
           ● GANCHO
         </h1>
         <p style="font-size: 14px; line-height: 1.8; color: #333;">
-          Olá, <strong>${nome.split(" ")[0]}</strong>!
+          Olá, <strong>${escaparHtml(nome.split(" ")[0])}</strong>!
         </p>
         <p style="font-size: 14px; line-height: 1.8; color: #333;">
           Recebemos um pedido para redefinir sua senha. Clique no botão abaixo para criar uma nova:

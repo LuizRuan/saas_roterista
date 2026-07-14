@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import compression from "compression";
 import helmet from "helmet";
@@ -19,13 +20,37 @@ if (env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
+// SEC-18: X-Request-ID — correlaciona logs de um mesmo request para investigação
+app.use((_req, res, next) => {
+  const id = crypto.randomUUID();
+  res.setHeader("X-Request-ID", id);
+  next();
+});
+
+// SEC-16: Helmet + Permissions-Policy manual (Helmet v8 não expõe essa opção)
 app.use(helmet());
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 // I5: Compressão gzip/deflate — reduz payload JSON ~70%
 app.use(compression());
+// SEC-10: CORS com validação dinâmica de origin e restrição de métodos/headers
+const origensPermitidas = [env.CLIENT_URL];
 app.use(
   cors({
-    origin: env.CLIENT_URL, // apenas o domínio do frontend
-    credentials: true, // necessário para o cookie httpOnly do refresh token
+    origin: (origin, callback) => {
+      // Requests sem origin (curl, server-to-server) — permitidos porque autenticação
+      // via Bearer token já protege; e no dev local é necessário.
+      if (!origin || origensPermitidas.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Origem não permitida pelo CORS."));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-cliente"],
   })
 );
 app.use(express.json({ limit: "100kb" }));
@@ -34,9 +59,17 @@ app.use(cookieParser());
 app.get("/health", (_req, res) => {
   // M2: Cache-Control explícito — dados dinâmicos, sem cache
   res.set("Cache-Control", "no-store");
+  const dbOk = mongoose.connection.readyState === 1;
+
+  // SEC-09: em produção, não expor estado do banco nem uptime (fingerprinting)
+  if (env.NODE_ENV === "production") {
+    res.status(dbOk ? 200 : 503).json({ status: dbOk ? "ok" : "degraded" });
+    return;
+  }
+
   res.json({
     status: "ok",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    db: dbOk ? "connected" : "disconnected",
     uptime: Math.round(process.uptime()),
   });
 });

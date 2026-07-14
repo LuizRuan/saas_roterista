@@ -61,8 +61,17 @@ if (env.NODE_ENV === "production") {
     );
     process.exit(1);
   }
+  // SEC-04: secrets fracos permitem brute force do JWT
+  if (env.JWT_ACCESS_SECRET.length < 32 || env.JWT_REFRESH_SECRET.length < 32) {
+    console.error("[env] JWT_ACCESS_SECRET e JWT_REFRESH_SECRET devem ter pelo menos 32 caracteres.");
+    process.exit(1);
+  }
   if (!process.env.PIX_HMAC_SECRET) {
     console.error("[env] PIX_HMAC_SECRET é obrigatória em produção.");
+    process.exit(1);
+  }
+  if (env.PIX_HMAC_SECRET.length < 32) {
+    console.error("[env] PIX_HMAC_SECRET deve ter pelo menos 32 caracteres.");
     process.exit(1);
   }
 }

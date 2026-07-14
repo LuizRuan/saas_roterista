@@ -6,6 +6,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { env } from "../config/env";
 import { UsuarioModel, usuarioPublico, type UsuarioDoc } from "../models/usuario";
 import { RoteiroModel } from "../models/roteiro";
+import { AssinaturaModel } from "../models/assinatura";
 import { cadastroSchema, loginSchema } from "../schemas/auth";
 import { validarBody } from "../middleware/validar";
 import { autenticar } from "../middleware/autenticar";
@@ -149,6 +150,13 @@ authRouter.post(
     });
 
     const accessToken = await abrirSessao(res, usuario);
+
+    // SEC-06: log de auditoria
+    logger.info("auth", "Cadastro realizado", {
+      usuarioId: usuario._id.toString(),
+      ip: req.ip,
+    });
+
     res.status(201).json({ usuario: usuarioPublico(usuario), accessToken });
   })
 );
@@ -156,6 +164,7 @@ authRouter.post(
 authRouter.post(
   "/login",
   limitePorEmail, // I4: limite por e-mail específico
+  exigirTurnstile, // SEC-11: CAPTCHA anti-bot no login
   validarBody(loginSchema),
   rotaAsync(async (req, res) => {
     const { email, senha } = req.body;
@@ -171,6 +180,14 @@ authRouter.post(
     }
 
     const accessToken = await abrirSessao(res, usuario);
+
+    // SEC-06: log de auditoria
+    logger.info("auth", "Login bem-sucedido", {
+      usuarioId: usuario._id.toString(),
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json({ usuario: usuarioPublico(usuario), accessToken });
   })
 );
@@ -219,6 +236,11 @@ authRouter.post(
       );
     }
 
+    // SEC-06: log de auditoria
+    if (payload) {
+      logger.info("auth", "Logout", { usuarioId: payload.sub, ip: req.ip });
+    }
+
     res.clearCookie(REFRESH_COOKIE, { ...opcoesCookie, maxAge: undefined });
     res.status(204).end();
   })
@@ -265,8 +287,16 @@ authRouter.delete(
       return;
     }
 
+    // SEC-05: limpar todos os dados do usuário (LGPD — direito ao esquecimento)
     await RoteiroModel.deleteMany({ usuarioId: usuario._id });
+    await AssinaturaModel.deleteMany({ usuarioId: usuario._id });
     await UsuarioModel.findByIdAndDelete(usuario._id);
+
+    // SEC-06: log de auditoria
+    logger.info("auth", "Conta excluída pelo usuário", {
+      usuarioId: usuario._id.toString(),
+      ip: req.ip,
+    });
 
     res.clearCookie(REFRESH_COOKIE, { ...opcoesCookie, maxAge: undefined });
     res.status(204).end();
@@ -281,9 +311,21 @@ const recuperarSchema = z.object({
   email: z.string().email("E-mail inválido.").transform((e) => e.toLowerCase().trim()),
 });
 
+// SEC-07: mesmas regras de senha do cadastro — sem isso, o reset aceitaria senhas fracas
 const resetarSchema = z.object({
   token: z.string().min(1, "Token obrigatório."),
-  novaSenha: z.string().min(8, "A nova senha precisa de pelo menos 8 caracteres."),
+  novaSenha: cadastroSchema.shape.senha,
+});
+
+// SEC-08: rate limit no reset de senha — evita brute force de tokens
+const limiteReset = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "anon"),
+  message: { erro: "Muitas tentativas de redefinição. Aguarde 15 minutos." },
 });
 
 /**
@@ -325,6 +367,7 @@ authRouter.post(
  */
 authRouter.post(
   "/resetar-senha",
+  limiteReset,
   validarBody(resetarSchema),
   rotaAsync(async (req, res) => {
     const { token, novaSenha } = req.body;
@@ -350,6 +393,12 @@ authRouter.post(
     // Revoga sessão ativa para forçar login com nova senha
     usuario.refreshTokenHash = null;
     await usuario.save();
+
+    // SEC-06: log de auditoria
+    logger.info("auth", "Senha redefinida via token de recuperação", {
+      usuarioId: usuario._id.toString(),
+      ip: req.ip,
+    });
 
     res.json({ mensagem: "Senha alterada com sucesso! Faça login com a nova senha." });
   })
