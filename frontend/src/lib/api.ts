@@ -5,6 +5,8 @@ export type Usuario = {
   nome: string;
   email: string;
   plano: "free" | "pro";
+  /** Quando o plano pro expira (ISO). null quando free/expirado. */
+  planoExpiraEm: string | null;
   papel: "usuario" | "admin";
   criadoEm: string;
 };
@@ -170,6 +172,27 @@ export async function excluirConta(senha: string): Promise<void> {
   });
   accessToken = null;
   limparCacheUsuario();
+}
+
+/** Edita o perfil (nome) da conta logada. */
+export async function editarPerfil(nome: string): Promise<Usuario> {
+  const corpo = await requisicao<{ usuario: Usuario }>("/auth/eu", {
+    method: "PATCH",
+    body: JSON.stringify({ nome }),
+  });
+  limparCacheUsuario();
+  return corpo.usuario;
+}
+
+/** Troca a senha estando logado. Revoga a sessão — precisa logar de novo. */
+export async function trocarSenha(senhaAtual: string, novaSenha: string): Promise<{ mensagem: string }> {
+  const corpo = await requisicao<{ mensagem: string }>("/auth/trocar-senha", {
+    method: "POST",
+    body: JSON.stringify({ senhaAtual, novaSenha }),
+  });
+  accessToken = null; // sessão revogada no servidor
+  limparCacheUsuario();
+  return corpo;
 }
 
 /**
@@ -400,32 +423,31 @@ export async function resetarSenha(token: string, novaSenha: string): Promise<{ 
   });
 }
 
-// ─── Pagamentos PIX ─────────────────────────────────────────────────────────
+// ─── Pagamento Pix (plano pro — Mercado Pago) ────────────────────────────────
 
-export type DadosPix = {
-  assinaturaId: string;
-  pixCopiaECola: string;
+export type CobrancaPix = {
+  pagamentoId: string;
+  copiaECola: string;
   qrCodeBase64: string;
-  expiraEm: string;
-  valor: number;
-};
-
-export type StatusPagamento = {
-  status: "pendente" | "pago" | "expirado" | "cancelado";
+  valorCentavos: number;
   expiraEm: string;
 };
 
-/** Gera código PIX para upgrade ao plano Pro. Retorna dados do PIX + QR. */
-export async function gerarPix(): Promise<DadosPix> {
-  return requisicao<DadosPix>("/pagamentos/pix", { method: "POST" });
+export type StatusPagamento = "pendente" | "aprovado" | "expirado" | "cancelado";
+
+/** Preço atual do plano pro em centavos (fonte única no backend). */
+export async function precoPlanoPro(): Promise<number> {
+  const corpo = await requisicao<{ valorCentavos: number }>("/pagamentos/preco");
+  return corpo.valorCentavos;
 }
 
-/** Polling do status de um pagamento PIX. */
-export async function consultarStatusPagamento(id: string): Promise<StatusPagamento> {
-  return requisicao<StatusPagamento>(`/pagamentos/${id}/status`);
+/** Cria a cobrança Pix do plano pro e devolve o QR + copia-e-cola. */
+export async function criarPagamentoPix(): Promise<CobrancaPix> {
+  return requisicao<CobrancaPix>("/pagamentos/criar-pix", { method: "POST", body: "{}" });
 }
 
-/** Cancela um pagamento PIX pendente. */
-export async function cancelarPagamento(id: string): Promise<void> {
-  await requisicao<null>(`/pagamentos/${id}/cancelar`, { method: "POST" });
+/** Consulta o status de um pagamento — usado no polling da tela de planos. */
+export async function statusPagamento(pagamentoId: string): Promise<StatusPagamento> {
+  const corpo = await requisicao<{ status: StatusPagamento }>(`/pagamentos/status/${pagamentoId}`);
+  return corpo.status;
 }

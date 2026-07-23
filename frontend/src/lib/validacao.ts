@@ -16,14 +16,6 @@ function dominioPermitido(email: string): boolean {
   return dominio ? DOMINIOS_PERMITIDOS.includes(dominio) : false;
 }
 
-// ─── Validação de senha ──────────────────────────────────────────────────────
-function regrasSenha(senha: string): string | true {
-  if (/\s/.test(senha)) return "A senha não pode conter espaços.";
-  if (!/[A-Za-z]/.test(senha)) return "A senha precisa de pelo menos uma letra.";
-  if (!/[0-9]/.test(senha)) return "A senha precisa de pelo menos um número.";
-  return true;
-}
-
 // ─── Schemas (espelham backend/src/schemas/auth.ts) ─────────────────────────
 
 export const cadastroSchema = z.object({

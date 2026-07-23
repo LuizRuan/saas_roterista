@@ -67,13 +67,14 @@ async function criarUsuarioComToken() {
   return { accessToken: cadastro.body.accessToken as string, usuarioId: cadastro.body.usuario.id as string };
 }
 
-/** Cria uma conta com plano "pro" direto no banco — hoje não existe fluxo de upgrade real. */
+/** Cria uma conta pro com validade futura (pro só existe com planoExpiraEm no futuro). */
 async function criarUsuarioProComToken() {
   const usuario = await UsuarioModel.create({
     nome: "Usuário Pro",
     email: "pro@gmail.com",
     senhaHash: "hash-nao-usado-neste-teste",
     plano: "pro",
+    planoExpiraEm: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
   return {
     accessToken: gerarAccessToken(usuario._id.toString(), "usuario"),

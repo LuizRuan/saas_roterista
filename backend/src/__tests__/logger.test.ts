@@ -29,7 +29,14 @@ describe("logger", () => {
   });
 
   it("em produção, gera uma linha JSON válida com nivel/modulo/mensagem", async () => {
+    // O logger importa config/env, que revalida no import e faz process.exit
+    // se faltarem vars obrigatórias em produção — fornecemos as exigidas.
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017/teste");
+    vi.stubEnv("JWT_ACCESS_SECRET", "acesso-secret-teste-producao-com-32-chars");
+    vi.stubEnv("JWT_REFRESH_SECRET", "refresh-secret-teste-producao-com-32-chars");
+    vi.stubEnv("CLIENT_URL", "https://exemplo.com");
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "chave-turnstile-teste");
     vi.resetModules();
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const { logger } = await import("../lib/logger");

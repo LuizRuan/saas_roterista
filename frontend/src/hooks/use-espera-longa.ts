@@ -11,12 +11,14 @@ export function useEsperaLonga(ativo: boolean, limiarMs = 4000): boolean {
   const [demorou, setDemorou] = useState(false);
 
   useEffect(() => {
-    if (!ativo) {
-      setDemorou(false);
-      return;
-    }
+    if (!ativo) return;
     const id = setTimeout(() => setDemorou(true), limiarMs);
-    return () => clearTimeout(id);
+    // Reset no cleanup (roda quando `ativo` deixa de ser true) — evita
+    // setState síncrono no corpo do efeito (cascading renders).
+    return () => {
+      clearTimeout(id);
+      setDemorou(false);
+    };
   }, [ativo, limiarMs]);
 
   return demorou;

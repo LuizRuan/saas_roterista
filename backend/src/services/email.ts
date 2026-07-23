@@ -61,11 +61,13 @@ export async function enviarEmailRecuperacao(
   return true;
 }
 
-function escaparHtml(valor: unknown): string {
+export function escaparHtml(valor: unknown): string {
   return String(valor)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
