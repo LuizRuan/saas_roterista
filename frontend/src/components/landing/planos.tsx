@@ -53,14 +53,17 @@ export function Planos() {
           <Reveal delay={0.08} className="h-full">
             <article className="relative flex h-full flex-col rounded-lg border-2 border-tinta bg-papel p-6 shadow-[6px_6px_0_0_rgba(19,18,16,0.15)]">
               <p className="absolute -top-3 right-5 rounded-sm bg-marca px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide">
-                Em breve
+                Recomendado
               </p>
               <h3 className="font-mono text-sm font-semibold uppercase tracking-widest">
                 Pro
               </h3>
-              <p className="mt-3 font-display text-4xl">R$ —/mês</p>
-              <p className="mt-1 text-sm text-cinza">
-                preço de lançamento em breve
+              <p className="mt-3 flex items-baseline gap-1.5 font-display text-5xl">
+                <span className="marca-texto">R$&nbsp;19,90</span>
+                <span className="font-mono text-base font-normal text-cinza">/mês</span>
+              </p>
+              <p className="mt-2 text-sm text-cinza">
+                Pague com Pix · 30 dias · sem assinatura automática
               </p>
               <ul className="mt-6 flex-1 space-y-2.5">
                 {planoPro.map((item) => (
@@ -71,7 +74,7 @@ export function Planos() {
                 ))}
               </ul>
               <Botao href="/planos" variante="marca" className="mt-8 w-full">
-                Avise-me do lançamento
+                Assinar com Pix
               </Botao>
             </article>
           </Reveal>
