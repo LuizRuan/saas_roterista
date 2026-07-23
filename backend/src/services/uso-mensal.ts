@@ -16,7 +16,7 @@ import { UsuarioModel } from "../models/usuario";
  */
 export async function reservarUsoMensal(
   usuarioId: string
-): Promise<{ quantidade: number; plano: "free" | "pro" }> {
+): Promise<{ quantidade: number; plano: "free" | "pro"; planoExpiraEm: Date | null }> {
   const mes = inicioDoMes();
 
   const usuario = await UsuarioModel.findOneAndUpdate(
@@ -43,6 +43,7 @@ export async function reservarUsoMensal(
   return {
     quantidade: usuario?.usoRoteirosMensal?.quantidade ?? 0,
     plano: usuario?.plano ?? "free",
+    planoExpiraEm: usuario?.planoExpiraEm ?? null,
   };
 }
 

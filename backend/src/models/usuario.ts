@@ -12,6 +12,9 @@ const usuarioSchema = new Schema(
     },
     senhaHash: { type: String, required: true },
     plano: { type: String, enum: ["free", "pro"], default: "free" },
+    // Quando o plano pro expira. null = sem pro. Pro só vale enquanto está no
+    // futuro (ver planoProAtivo) — pro expirado é tratado como free sem job.
+    planoExpiraEm: { type: Date, default: null },
     papel: { type: String, enum: ["usuario", "admin"], default: "usuario" },
     // SHA-256 do refresh token ativo (rotação): null = nenhuma sessão aberta.
     refreshTokenHash: { type: String, default: null },
@@ -40,13 +43,28 @@ usuarioSchema.index({ plano: 1 });
 
 export const UsuarioModel = model("Usuario", usuarioSchema);
 
+/**
+ * Fonte única da verdade para "o usuário tem pro ativo?". Pro só vale enquanto
+ * planoExpiraEm está no futuro — assim um pro expirado é tratado como free em
+ * todo lugar (limite mensal, etc.) sem precisar de job para rebaixar contas.
+ */
+export function planoProAtivo(
+  usuario: { plano?: string | null; planoExpiraEm?: Date | null } | null | undefined
+): boolean {
+  if (!usuario || usuario.plano !== "pro") return false;
+  return !!usuario.planoExpiraEm && usuario.planoExpiraEm.getTime() > Date.now();
+}
+
 /** Forma pública do usuário — nunca expõe senhaHash/refreshTokenHash. */
 export function usuarioPublico(usuario: UsuarioDoc) {
+  const proAtivo = planoProAtivo(usuario);
   return {
     id: usuario._id.toString(),
     nome: usuario.nome,
     email: usuario.email,
-    plano: usuario.plano,
+    // Reflete a validade: pro expirado aparece como "free" para o frontend.
+    plano: (proAtivo ? "pro" : "free") as "free" | "pro",
+    planoExpiraEm: proAtivo ? usuario.planoExpiraEm : null,
     papel: usuario.papel as "usuario" | "admin",
     criadoEm: usuario.createdAt,
   };

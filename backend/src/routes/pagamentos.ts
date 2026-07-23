@@ -1,17 +1,20 @@
 import { Router, type RequestHandler } from "express";
-import crypto from "node:crypto";
-import rateLimit from "express-rate-limit";
-import mongoose from "mongoose";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { autenticar } from "../middleware/autenticar";
 import { validarObjectIdParam } from "../middleware/validar";
-import { AssinaturaModel } from "../models/assinatura";
 import { UsuarioModel } from "../models/usuario";
-import { gerarCodigoPix } from "../services/pix";
-import { gerarQRCodeBase64 } from "../services/qrcode";
+import { PagamentoModel, type PagamentoDoc } from "../models/pagamento";
+import {
+  pagamentoConfigurado,
+  criarPagamentoPix,
+  consultarPagamento,
+  validarAssinaturaWebhook,
+} from "../services/mercadopago";
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
 
-const PIX_EXPIRACAO_MS = 15 * 60 * 1000; // 15 minutos
+const QR_TTL_MS = 30 * 60 * 1000; // 30 min de validade do QR
+const PRO_DURACAO_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias de pro
 
 /** Envolve handler async para o Express 4 capturar erros rejeitados. */
 function rotaAsync(handler: RequestHandler): RequestHandler {
@@ -20,206 +23,208 @@ function rotaAsync(handler: RequestHandler): RequestHandler {
   };
 }
 
-/** Sem banco conectado, devolve 503 amigável. */
-const exigirBanco: RequestHandler = (_req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
-    res.status(503).json({
-      erro: "Banco de dados indisponível.",
+/** Sem token do Mercado Pago, a feature está desligada — 503 amigável. */
+const exigirPagamentoConfigurado: RequestHandler = (_req, res, next) => {
+  if (!pagamentoConfigurado()) {
+    res.status(503).json({ erro: "Pagamentos indisponíveis no momento." });
+    return;
+  }
+  next();
+};
+
+// Freio contra criação em rajada de cobranças (por usuário, fallback por IP).
+const limiteCriar = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  keyGenerator: (req) => req.usuarioId ?? ipKeyGenerator(req.ip ?? "anon"),
+  message: { erro: "Muitas tentativas de pagamento. Aguarde alguns minutos." },
+});
+
+/**
+ * Coração da concessão do pro — usado tanto pelo webhook quanto pelo polling de
+ * status (fallback caso o webhook nunca chegue). Consulta o status REAL no
+ * Mercado Pago, confere o valor e concede o pro de forma **idempotente**: só
+ * quem vencer a trava atômica `planoConcedido` estende o plano.
+ *
+ * Retorna o status resultante do pagamento local.
+ */
+async function sincronizarPagamento(
+  pagamento: PagamentoDoc
+): Promise<"pendente" | "aprovado" | "cancelado"> {
+  if (pagamento.planoConcedido) return "aprovado";
+
+  const mp = await consultarPagamento(pagamento.mpPaymentId);
+  if (!mp) return "pendente";
+
+  if (mp.status !== "approved") {
+    if (mp.status === "cancelled" || mp.status === "rejected") {
+      await PagamentoModel.updateOne({ _id: pagamento._id }, { $set: { status: "cancelado" } });
+      return "cancelado";
+    }
+    return "pendente";
+  }
+
+  // Confere o valor pago contra o preço registrado na criação.
+  if (mp.valorCentavos !== pagamento.valorCentavos) {
+    logger.error("pagamentos", "Valor pago diverge do esperado — não concedendo pro", {
+      mpPaymentId: pagamento.mpPaymentId,
+      esperado: pagamento.valorCentavos,
+      recebido: mp.valorCentavos,
     });
-    return;
+    return "pendente";
   }
-  next();
-};
 
-/**
- * SEC-03: Anti-CSRF — exige header customizado `x-cliente: gancho-web`.
- * Formulários HTML não conseguem enviá-lo, e fetch de outra origem dispara
- * preflight barrado pelo CORS.
- */
-const exigirCabecalhoCliente: RequestHandler = (req, res, next) => {
-  if (req.headers["x-cliente"] !== "gancho-web") {
-    res.status(403).json({ erro: "Origem da requisição não reconhecida." });
-    return;
-  }
-  next();
-};
+  // Trava atômica de idempotência: só quem virar o flag concede o pro.
+  const claim = await PagamentoModel.findOneAndUpdate(
+    { mpPaymentId: pagamento.mpPaymentId, planoConcedido: false },
+    { $set: { planoConcedido: true, status: "aprovado" } },
+    { new: true }
+  );
+  if (!claim) return "aprovado"; // outra execução já concedeu
 
-/**
- * Rate limit por usuário — máximo 5 gerações de PIX por hora.
- * Evita spam de códigos PIX e abuso de recursos (QR code, banco).
- */
-const limitePix = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  limit: 5,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  skip: () => env.NODE_ENV === "test",
-  keyGenerator: (req) => req.usuarioId ?? "anon",
-  message: { erro: "Muitas tentativas de pagamento. Aguarde uma hora." },
-});
+  // Estende a partir do vencimento atual (se ainda pro) ou de agora — não perde
+  // dias quem paga adiantado.
+  const usuario = await UsuarioModel.findById(pagamento.usuarioId).select("planoExpiraEm");
+  const base = Math.max(Date.now(), usuario?.planoExpiraEm?.getTime() ?? 0);
+  const novaExpiracao = new Date(base + PRO_DURACAO_MS);
 
-/**
- * Rate limit no polling de status — máximo 120 req/min por usuário.
- * O frontend faz polling a cada 5s (~12 req/min), então 120 dá margem
- * sem permitir abuso.
- */
-const limitePolling = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 120,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  skip: () => env.NODE_ENV === "test",
-  keyGenerator: (req) => req.usuarioId ?? "anon",
-  message: { erro: "Muitas consultas. Aguarde um momento." },
-});
+  await UsuarioModel.updateOne(
+    { _id: pagamento.usuarioId },
+    { $set: { plano: "pro", planoExpiraEm: novaExpiracao } }
+  );
+
+  logger.info("pagamentos", "Plano pro concedido via Pix", {
+    usuarioId: pagamento.usuarioId.toString(),
+    expiraEm: novaExpiracao.toISOString(),
+  });
+
+  return "aprovado";
+}
 
 export const pagamentosRouter = Router();
 
-pagamentosRouter.use(autenticar, exigirCabecalhoCliente, exigirBanco);
+/** GET /pagamentos/preco — preço atual do plano pro (fonte única no backend). */
+pagamentosRouter.get("/preco", (_req, res) => {
+  res.json({ valorCentavos: env.PLANO_PRO_PRECO_CENTAVOS });
+});
 
-// ─── POST /pagamentos/pix ─────────────────────────────────────────────────────
-// Gera código PIX para upgrade ao plano Pro.
-
+/**
+ * POST /pagamentos/criar-pix
+ * Cria uma cobrança Pix do plano pro e devolve o copia-e-cola + imagem do QR.
+ */
 pagamentosRouter.post(
-  "/pix",
-  limitePix,
+  "/criar-pix",
+  autenticar,
+  exigirPagamentoConfigurado,
+  limiteCriar,
   rotaAsync(async (req, res) => {
     res.set("Cache-Control", "no-store");
 
-    const usuarioId = req.usuarioId!;
-
-    // Verifica se já é Pro
-    const usuario = await UsuarioModel.findById(usuarioId).select("plano");
+    const usuario = await UsuarioModel.findById(req.usuarioId).select("email");
     if (!usuario) {
       res.status(401).json({ erro: "Conta não encontrada." });
       return;
     }
-    if (usuario.plano === "pro") {
-      res.status(409).json({ erro: "Você já possui o plano Pro." });
-      return;
-    }
 
-    // Idempotência — se já existe pagamento pendente válido, retorna ele
-    const pendente = await AssinaturaModel.findOne({
-      usuarioId,
+    const valorCentavos = env.PLANO_PRO_PRECO_CENTAVOS;
+    const expiraEm = new Date(Date.now() + QR_TTL_MS);
+
+    const pix = await criarPagamentoPix(valorCentavos, usuario.email, expiraEm);
+
+    const pagamento = await PagamentoModel.create({
+      usuarioId: usuario._id,
+      mpPaymentId: pix.mpPaymentId,
+      valorCentavos,
       status: "pendente",
-      expiraEm: { $gt: new Date() },
-    });
-
-    if (pendente) {
-      const qrCodeBase64 = await gerarQRCodeBase64(pendente.pixCopiaECola);
-      res.json({
-        assinaturaId: pendente._id.toString(),
-        pixCopiaECola: pendente.pixCopiaECola,
-        qrCodeBase64,
-        expiraEm: pendente.expiraEm,
-        valor: pendente.valor,
-      });
-      return;
-    }
-
-    const valor = env.PIX_VALOR_PRO_CENTAVOS;
-    const expiraEm = new Date(Date.now() + PIX_EXPIRACAO_MS);
-
-    // Chave de idempotência única por tentativa
-    const idempotencyKey = `${usuarioId}-${crypto.randomUUID()}`;
-
-    // Cria a assinatura primeiro para ter o ID
-    const assinatura = new AssinaturaModel({
-      usuarioId,
-      plano: "pro",
-      valor,
-      status: "pendente",
-      pixCopiaECola: "", // preenchido logo abaixo
-      pixHash: "",
       expiraEm,
-      idempotencyKey,
-    });
-
-    // Gera código PIX + HMAC vinculado ao ID da assinatura
-    const { codigo, hmac } = gerarCodigoPix(assinatura._id.toString(), valor);
-    assinatura.pixCopiaECola = codigo;
-    assinatura.pixHash = hmac;
-
-    await assinatura.save();
-
-    // Gera QR code
-    const qrCodeBase64 = await gerarQRCodeBase64(codigo);
-
-    logger.info("pagamento", "PIX gerado", {
-      assinaturaId: assinatura._id.toString(),
-      usuarioId,
     });
 
     res.status(201).json({
-      assinaturaId: assinatura._id.toString(),
-      pixCopiaECola: codigo,
-      qrCodeBase64,
-      expiraEm,
-      valor,
+      pagamentoId: pagamento._id.toString(),
+      copiaECola: pix.copiaECola,
+      qrCodeBase64: pix.qrCodeBase64,
+      valorCentavos,
+      expiraEm: expiraEm.toISOString(),
     });
   })
 );
 
-// ─── GET /pagamentos/:id/status ───────────────────────────────────────────────
-// Polling do status do pagamento.
-
+/**
+ * GET /pagamentos/status/:id
+ * O frontend faz polling aqui. Se ainda pendente, consulta o Mercado Pago
+ * direto (fallback) — assim um webhook perdido não deixa o usuário pagando
+ * sem receber o pro.
+ */
 pagamentosRouter.get(
-  "/:id/status",
-  limitePolling,
+  "/status/:id",
+  autenticar,
   validarObjectIdParam("id"),
   rotaAsync(async (req, res) => {
     res.set("Cache-Control", "no-store");
 
-    const assinatura = await AssinaturaModel.findOne({
+    const pagamento = await PagamentoModel.findOne({
       _id: req.params.id,
-      usuarioId: req.usuarioId,
+      usuarioId: req.usuarioId, // IDOR: só o dono vê o próprio pagamento
     });
-
-    if (!assinatura) {
+    if (!pagamento) {
       res.status(404).json({ erro: "Pagamento não encontrado." });
       return;
     }
 
-    // Expira automaticamente se o prazo passou
-    if (assinatura.status === "pendente" && assinatura.expiraEm < new Date()) {
-      assinatura.status = "expirado";
-      await assinatura.save();
+    // Fallback ao webhook: enquanto pendente, confirma direto no MP.
+    if (pagamento.status === "pendente" && pagamentoConfigurado()) {
+      const resultado = await sincronizarPagamento(pagamento);
+      if (resultado !== "pendente") {
+        res.json({ status: resultado });
+        return;
+      }
     }
 
-    res.json({
-      status: assinatura.status,
-      expiraEm: assinatura.expiraEm,
-    });
+    // Marca como expirado se o QR venceu e ninguém pagou.
+    if (pagamento.status === "pendente" && pagamento.expiraEm.getTime() < Date.now()) {
+      pagamento.status = "expirado";
+      await pagamento.save();
+    }
+
+    res.json({ status: pagamento.status });
   })
 );
 
-// ─── POST /pagamentos/:id/cancelar ───────────────────────────────────────────
-// Cancela um pagamento pendente.
-
+/**
+ * POST /pagamentos/webhook
+ * Notificação do Mercado Pago. NUNCA confia no cliente — valida a assinatura e
+ * delega a confirmação (consulta ao MP + concessão idempotente) para
+ * sincronizarPagamento.
+ */
 pagamentosRouter.post(
-  "/:id/cancelar",
-  validarObjectIdParam("id"),
+  "/webhook",
   rotaAsync(async (req, res) => {
-    const assinatura = await AssinaturaModel.findOne({
-      _id: req.params.id,
-      usuarioId: req.usuarioId,
-      status: "pendente",
-    });
+    const dataId =
+      (req.query["data.id"] as string | undefined) ?? (req.body?.data?.id as string | undefined);
 
-    if (!assinatura) {
-      res.status(404).json({ erro: "Pagamento pendente não encontrado." });
+    const assinaturaOk = validarAssinaturaWebhook(
+      req.headers["x-signature"] as string | undefined,
+      req.headers["x-request-id"] as string | undefined,
+      dataId ? String(dataId) : undefined
+    );
+    if (!assinaturaOk) {
+      res.status(401).json({ erro: "Assinatura inválida." });
       return;
     }
 
-    assinatura.status = "cancelado";
-    await assinatura.save();
+    const tipo = (req.query["type"] as string | undefined) ?? req.body?.type;
+    if (tipo !== "payment" || !dataId) {
+      res.status(200).end();
+      return;
+    }
 
-    logger.info("pagamento", "Pagamento cancelado pelo usuário", {
-      assinaturaId: assinatura._id.toString(),
-      usuarioId: req.usuarioId,
-    });
+    const pagamento = await PagamentoModel.findOne({ mpPaymentId: String(dataId) });
+    if (pagamento) await sincronizarPagamento(pagamento);
 
-    res.status(204).end();
+    // Sempre 200 para o MP parar de reenviar (a idempotência protege duplicatas).
+    res.status(200).end();
   })
 );

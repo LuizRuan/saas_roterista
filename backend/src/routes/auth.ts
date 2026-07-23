@@ -6,7 +6,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { env } from "../config/env";
 import { UsuarioModel, usuarioPublico, type UsuarioDoc } from "../models/usuario";
 import { RoteiroModel } from "../models/roteiro";
-import { AssinaturaModel } from "../models/assinatura";
+import { PagamentoModel } from "../models/pagamento";
 import { cadastroSchema, loginSchema } from "../schemas/auth";
 import { validarBody } from "../middleware/validar";
 import { autenticar } from "../middleware/autenticar";
@@ -263,6 +263,66 @@ authRouter.get(
   })
 );
 
+// ─── Gerenciamento de conta ──────────────────────────────────────────────────
+
+const editarPerfilSchema = z.object({
+  nome: cadastroSchema.shape.nome,
+});
+
+const trocarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1, "Informe sua senha atual."),
+  novaSenha: cadastroSchema.shape.senha,
+});
+
+/** PATCH /auth/eu — edita o perfil (por enquanto, só o nome). */
+authRouter.patch(
+  "/eu",
+  autenticar,
+  validarBody(editarPerfilSchema),
+  rotaAsync(async (req, res) => {
+    const usuario = await UsuarioModel.findByIdAndUpdate(
+      req.usuarioId,
+      { $set: { nome: req.body.nome } },
+      { new: true, runValidators: true }
+    );
+    if (!usuario) {
+      res.status(401).json({ erro: "Conta não encontrada." });
+      return;
+    }
+    res.json({ usuario: usuarioPublico(usuario) });
+  })
+);
+
+/** POST /auth/trocar-senha — troca a senha estando logado; revoga a sessão. */
+authRouter.post(
+  "/trocar-senha",
+  autenticar,
+  validarBody(trocarSenhaSchema),
+  rotaAsync(async (req, res) => {
+    const { senhaAtual, novaSenha } = req.body;
+
+    const usuario = await UsuarioModel.findById(req.usuarioId);
+    if (!usuario) {
+      res.status(401).json({ erro: "Conta não encontrada." });
+      return;
+    }
+
+    const senhaOk = await bcrypt.compare(senhaAtual, usuario.senhaHash);
+    if (!senhaOk) {
+      res.status(401).json({ erro: "Senha atual incorreta." });
+      return;
+    }
+
+    usuario.senhaHash = await bcrypt.hash(novaSenha, CUSTO_BCRYPT);
+    // Revoga a sessão ativa: obriga novo login com a senha nova.
+    usuario.refreshTokenHash = null;
+    await usuario.save();
+
+    res.clearCookie(REFRESH_COOKIE, { ...opcoesCookie, maxAge: undefined });
+    res.json({ mensagem: "Senha alterada. Entre novamente com a nova senha." });
+  })
+);
+
 const excluirContaSchema = z.object({
   senha: z.string().min(1, "Informe sua senha."),
 });
@@ -293,7 +353,7 @@ authRouter.delete(
 
     // SEC-05: limpar todos os dados do usuário (LGPD — direito ao esquecimento)
     await RoteiroModel.deleteMany({ usuarioId: usuario._id });
-    await AssinaturaModel.deleteMany({ usuarioId: usuario._id });
+    await PagamentoModel.deleteMany({ usuarioId: usuario._id });
     await UsuarioModel.findByIdAndDelete(usuario._id);
 
     // SEC-06: log de auditoria

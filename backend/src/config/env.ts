@@ -23,15 +23,17 @@ const envSchema = z.object({
   // quebra em produção (IA fora do ar, banco caiu, exceção não tratada).
   ALERTA_EMAIL: z.string().default(""),
   // CAPTCHA anti-bot (cadastro e recuperação de senha) — Cloudflare Turnstile.
-  // Opcional em dev; sem ela a verificação é pulada (log de aviso).
+  // Opcional em dev; sem ela a verificação é pulada (log de aviso). Obrigatória em produção.
   TURNSTILE_SECRET_KEY: z.string().default(""),
-  // Pagamento PIX — chave HMAC para assinar códigos PIX (anti-fraude).
-  // Obrigatória em produção; em dev usa um default inseguro.
-  PIX_HMAC_SECRET: z.string().default("dev-pix-hmac-trocar-em-producao"),
-  // Chave PIX do recebedor (e-mail, CPF, telefone ou chave aleatória).
-  PIX_CHAVE: z.string().default(""),
-  // Valor do plano Pro em centavos (2990 = R$ 29,90).
-  PIX_VALOR_PRO_CENTAVOS: z.coerce.number().default(2990),
+  // Origens extras permitidas no CORS (ex.: previews da Vercel), por vírgula.
+  CORS_ORIGINS: z.string().default(""),
+  // Pagamento Pix (plano pro) — Mercado Pago. Sem o token, as rotas de pagamento
+  // respondem 503 (feature desligada), sem travar o boot.
+  MERCADOPAGO_ACCESS_TOKEN: z.string().default(""),
+  // Segredo para validar a assinatura dos webhooks do Mercado Pago.
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().default(""),
+  // Preço do plano pro em centavos (default R$ 19,90). Em env para trocar sem deploy.
+  PLANO_PRO_PRECO_CENTAVOS: z.coerce.number().int().positive().default(1990),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -66,12 +68,15 @@ if (env.NODE_ENV === "production") {
     console.error("[env] JWT_ACCESS_SECRET e JWT_REFRESH_SECRET devem ter pelo menos 32 caracteres.");
     process.exit(1);
   }
-  if (!process.env.PIX_HMAC_SECRET) {
-    console.error("[env] PIX_HMAC_SECRET é obrigatória em produção.");
+  // CLIENT_URL controla CORS e o cookie httpOnly do refresh — sem defini-la o
+  // schema cai no default localhost e quebra login/CORS silenciosamente.
+  if (!process.env.CLIENT_URL) {
+    console.error("[env] CLIENT_URL é obrigatória em produção (origem do frontend para CORS/cookie).");
     process.exit(1);
   }
-  if (env.PIX_HMAC_SECRET.length < 32) {
-    console.error("[env] PIX_HMAC_SECRET deve ter pelo menos 32 caracteres.");
+  // Turnstile é controle de segurança (anti-bot) — exigido para nunca falhar aberto.
+  if (!env.TURNSTILE_SECRET_KEY) {
+    console.error("[env] TURNSTILE_SECRET_KEY é obrigatória em produção (CAPTCHA anti-bot).");
     process.exit(1);
   }
 }

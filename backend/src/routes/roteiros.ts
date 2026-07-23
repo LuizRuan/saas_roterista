@@ -4,7 +4,7 @@ import { z } from "zod";
 import { autenticar } from "../middleware/autenticar";
 import { validarBody, validarObjectIdParam } from "../middleware/validar";
 import { RoteiroModel, roteiroPublico } from "../models/roteiro";
-import { UsuarioModel } from "../models/usuario";
+import { UsuarioModel, planoProAtivo } from "../models/usuario";
 import { executarPipeline } from "../services/ia/pipeline";
 import { getPadroesAtivos } from "../services/cache-padroes";
 import { agendarLimpezaRoteiros } from "../services/cleanup";
@@ -82,11 +82,13 @@ roteirosRouter.post(
     // permissões administrativas.
     const reserva = await reservarUsoMensal(usuarioId);
     const usadosNoMes = reserva.quantidade;
-    const limiteMensal = reserva.plano === "pro" ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
+    // Pro só conta se ainda estiver dentro da validade (planoExpiraEm futuro).
+    const ehPro = planoProAtivo({ plano: reserva.plano, planoExpiraEm: reserva.planoExpiraEm });
+    const limiteMensal = ehPro ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
 
     if (usadosNoMes > limiteMensal) {
       res.status(429).json({
-        erro: `Você atingiu o limite de ${limiteMensal} roteiros por mês no plano ${reserva.plano}. Novos roteiros liberam no próximo mês.`,
+        erro: `Você atingiu o limite de ${limiteMensal} roteiros por mês no plano ${ehPro ? "pro" : "free"}. Novos roteiros liberam no próximo mês.`,
         limite: limiteMensal,
         usados: limiteMensal,
       });
@@ -167,9 +169,9 @@ roteirosRouter.get(
         createdAt: { $gte: inicioDoMes() },
       }),
       // Query isolada e pequena — só pra saber o plano e aplicar o limite certo.
-      UsuarioModel.findById(req.usuarioId).select("plano").lean(),
+      UsuarioModel.findById(req.usuarioId).select("plano planoExpiraEm").lean(),
     ]);
-    const limiteMensal = usuario?.plano === "pro" ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
+    const limiteMensal = planoProAtivo(usuario) ? LIMITE_MENSAL_PRO : LIMITE_MENSAL_FREE;
 
     res.json({
       roteiros: roteiros.map(roteiroPublico),
