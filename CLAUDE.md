@@ -68,4 +68,4 @@ Nunca criar depoimentos ou métricas falsos apresentados como reais — exemplos
 
 ## Fases de construção
 
-O projeto é construído **em fases, com confirmação do usuário antes de cada uma**. Concluídas: 1-Setup, 2-Landing, 3-Auth+segurança. Próximas: 4-Dashboard+geração (plano free, entra a camada `ai-provider` Groq/Gemini free → Claude pro), 5-Formulário avançado/plano pago, 6-Estrutura de pagamento (Mercado Pago **preparado, sem cobrança ativa**), 7-Polimento. Status detalhado no `README.md`.
+O projeto é construído **em fases, com confirmação do usuário antes de cada uma**. Concluídas: 1-Setup, 2-Landing, 3-Auth+segurança (Turnstile, recuperação de senha, conta/LGPD), 4-Dashboard+geração (pipeline `services/ia/` Groq→Gemini, limite mensal), 6-Pagamento **Pix via Mercado Pago automático** (webhook assinado + fallback por polling; `services/mercadopago.ts`, `models/pagamento.ts`, `routes/pagamentos.ts`; plano pro por 30 dias = 50 roteiros/mês, ver `planoProAtivo`). Próximas: 5-Formulário avançado/plano pago, 7-Polimento. Status detalhado no `README.md`.

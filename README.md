@@ -16,7 +16,7 @@ estrutura de retenção) — não geração genérica de texto.
 | Banco | MongoDB Atlas (free tier) + Mongoose | Atlas |
 | Auth | JWT (15min) + refresh token em cookie httpOnly, bcrypt | — |
 | IA | Camada de abstração: Groq/Gemini (free) → Claude (pro) | — |
-| Pagamento | Mercado Pago Checkout Pro (estrutura preparada, não ativa) | — |
+| Pagamento | Pix via Mercado Pago (automático, webhook assinado + fallback) | — |
 
 ## Estrutura
 
@@ -95,9 +95,12 @@ npm run dev          # http://localhost:3000
 ## Fases de construção
 
 - [x] **Fase 1** — Setup (Next.js + Express + MongoDB + env)
-- [ ] **Fase 2** — Landing page completa
-- [x] **Fase 3** — Cadastro/Login + segurança (JWT, bcrypt, rate limit, CSRF)
-- [ ] **Fase 4** — Dashboard + geração de roteiro (plano free)
+- [x] **Fase 2** — Landing page completa
+- [x] **Fase 3** — Cadastro/Login + segurança (JWT, bcrypt, rate limit, CSRF, Turnstile,
+  recuperação de senha, conta/LGPD)
+- [x] **Fase 4** — Dashboard + geração de roteiro (pipeline de IA multi-agente, limite mensal)
 - [ ] **Fase 5** — Formulário avançado + lógica do plano pago
-- [ ] **Fase 6** — Estrutura de pagamento (Mercado Pago, preparada sem cobrança)
+- [x] **Fase 6** — Pagamento **Pix (Mercado Pago)** automático: cobrança com QR + copia-e-cola,
+  webhook com assinatura HMAC + fallback por polling, plano pro por 30 dias (50 roteiros/mês).
+  Requer `MERCADOPAGO_ACCESS_TOKEN`/`_WEBHOOK_SECRET` em produção.
 - [ ] **Fase 7** — Polimento visual, animações, responsividade
